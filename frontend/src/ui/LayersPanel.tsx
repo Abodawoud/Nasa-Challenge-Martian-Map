@@ -31,11 +31,25 @@ interface RowState {
 const initialState = (): Record<string, RowState> =>
   Object.fromEntries(PANEL_LAYERS.map((entry) => [entry.id, { on: entry.defaultOn, opacity: entry.defaultOpacity, loading: false, error: false }]))
 
-export function LayersPanel({ viewer }: { viewer: Cesium.Viewer | null }) {
+interface Props {
+  viewer: Cesium.Viewer | null
+  /** Told which layers are on (panel ids), for the map legend. */
+  onActiveChange?: (ids: string[]) => void
+}
+
+export function LayersPanel({ viewer, onActiveChange }: Props) {
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState(initialState)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const count = PANEL_LAYERS.filter((entry) => rows[entry.id].on).length
+
+  // The legend lists a layer once it is really on the map (not while it is still loading).
+  const active = PANEL_LAYERS.filter((entry) => rows[entry.id].on && !rows[entry.id].loading)
+    .map((entry) => entry.id)
+    .join('|')
+  useEffect(() => {
+    onActiveChange?.(active ? active.split('|') : [])
+  }, [active, onActiveChange])
 
   const patch = (id: string, change: Partial<RowState>) => setRows((all) => ({ ...all, [id]: { ...all[id], ...change } }))
 

@@ -219,6 +219,8 @@ export interface LegendItem {
   label: string
   /** Draw the sample as a line, not a square. */
   line?: boolean
+  /** Draw the sample as a round marker. */
+  dot?: boolean
   dashed?: boolean
 }
 
@@ -307,6 +309,10 @@ export const PANEL_LAYERS: PanelLayer[] = [
     title: 'Perseverance path',
     category: 'vector',
     note: 'Every drive of the rover since landing in 2021.',
+    legendItems: [
+      { color: '#ffffff', label: 'Path the rover drove', line: true },
+      { color: '#ffffff', label: 'Where the rover was last', dot: true },
+    ],
     source: 'NASA/JPL-Caltech, Mars 2020 mission map',
     defaultOn: false,
     defaultOpacity: 1,
@@ -319,6 +325,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     title: 'Landing ellipse',
     category: 'geology',
     note: 'The area the rover was planned to land in.',
+    legendItems: [{ color: '#ffffff', label: 'Planned landing area', line: true }],
     source: USGS_MAP,
     geology: { serviceLayer: 2, geometry: 'polygon', styles: {}, fallback: { stroke: '#ffffff', width: 3 }, countWord: 'outline' },
     defaultOn: false,
@@ -333,8 +340,8 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'geology',
     note: 'Small craters and blocks of broken old rock.',
     legendItems: [
-      { color: BLACK, label: 'Crater, 200 to 500 m' },
-      { color: '#ff0000', label: 'Megabreccia (broken old rock)' },
+      { color: BLACK, label: 'Crater, 200 to 500 m', dot: true },
+      { color: '#ff0000', label: 'Megabreccia (broken old rock)', dot: true },
     ],
     source: USGS_MAP,
     geology: {
@@ -358,6 +365,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     title: 'Cross sections',
     category: 'geology',
     note: 'The two lines along which the map shows a cut through the ground.',
+    legendItems: [{ color: BLACK, label: 'Cross section line', line: true }],
     source: USGS_MAP,
     geology: { serviceLayer: 3, geometry: 'line', styles: {}, fallback: { stroke: BLACK, width: 2.5, halo: true }, countWord: 'lines' },
     defaultOn: false,
@@ -483,6 +491,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     title: 'Map boundary',
     category: 'geology',
     note: 'The edge of the area the geologic map covers.',
+    legendItems: [{ color: BLACK, label: 'Edge of the geologic map', line: true }],
     source: USGS_MAP,
     geology: { serviceLayer: 0, geometry: 'polygon', styles: {}, fallback: { stroke: BLACK, width: 3, halo: true }, countWord: 'outline' },
     defaultOn: false,
@@ -514,6 +523,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'thermal',
     note: 'How warm the ground stays at night, 100 m per pixel.',
     legend: 'Bright = warm at night (rock). Dark = cold (dust and sand).',
+    legendScale: { css: 'linear-gradient(90deg, #111111, #ffffff)', low: 'Cold (dust, sand)', high: 'Warm (rock)' },
     source: 'THEMIS, NASA/JPL-Caltech/ASU',
     imageryIds: ['themis-night'],
     defaultOn: false,

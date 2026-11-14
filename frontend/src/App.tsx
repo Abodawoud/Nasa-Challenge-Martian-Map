@@ -7,6 +7,7 @@ import { MarsViewer, flyToJezero, setViewMode } from './globe/MarsViewer'
 import type { CursorInfo, ViewMode } from './globe/MarsViewer'
 import { MapControls } from './ui/MapControls'
 import { LayersPanel } from './ui/LayersPanel'
+import { MapLegend } from './ui/MapLegend'
 import { CompassStar } from './ui/CompassStar'
 import { visibleTilesLoaded } from './globe/preload'
 
@@ -28,6 +29,7 @@ export default function App() {
   const [api, setApi] = useState<ApiStatus>('checking')
   const [viewer, setViewer] = useState<Cesium.Viewer | null>(null)
   const [tilesLoading, setTilesLoading] = useState(true)
+  const [activeLayers, setActiveLayers] = useState<string[]>([])
 
   useEffect(() => {
     fetch('/api/health')
@@ -153,7 +155,8 @@ export default function App() {
       {/* The map. "mars-space" + data-sky (set by MarsViewer) draw the space or Mars sky behind it. */}
       <Box className="mars-space" position="relative" flex="1" minH="0" overflow="hidden">
         <MarsViewer onReady={onReady} onCursor={setCursor} onTerrainStatus={setTerrain} />
-        <LayersPanel viewer={viewer} />
+        <LayersPanel viewer={viewer} onActiveChange={setActiveLayers} />
+        <MapLegend activeLayers={activeLayers} />
         <MapControls viewer={viewer} />
       </Box>
 
