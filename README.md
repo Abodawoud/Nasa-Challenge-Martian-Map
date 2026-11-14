@@ -385,26 +385,37 @@ flowchart LR
 
 ### 5.2 Technical view
 
-```
-                     docker compose up
-┌──────────────────────────────┐            ┌──────────────────────────────────────┐
-│ frontend/  (container "fe")  │   /api/*   │ backend/  (container "be")           │
-│ React + TS + Vite + Tailwind │ ─────────► │ Python FastAPI                       │
-│                              │ ◄───────── │  ├─ /api/health                      │
-│ CesiumJS viewer (ONE)        │    JSON    │  ├─ /api/layers   (layer list)       │
-│  ├─ Mars sphere 3,396,190 m  │            │  ├─ /api/dem/info (area, size, ref)  │
-│  ├─ 2D ⇄ 2.5D ⇄ 3D           │            │  ├─ /api/point    (height, slope…)   │
-│  ├─ Image layers ◄───────────┼──┐         │  ├─ /api/route    (A and B + stats)  │
-│  ├─ 3D ground   ◄────────────┼─┐│         │  ├─ /api/profile  (height chart)     │
-│  └─ Routes, sites, rover path│ ││         │  └─ /api/sites, /api/rover-path      │
-└──────────────────────────────┘ ││         │                                      │
-                                 ││         │ rasterio + numpy + scikit-image      │
-     live, straight from NASA    ││         │ DEM in memory ◄── cache volume       │
-     (CORS ✅, nothing stored)    ││         └───────────────▲──────────────────────┘
-                                 ││                         │ first start: download
-  Trek terrain (marshub.s3) ─────┘│                         │ (not in git)
-  Trek WMTS tiles (trek.nasa.gov) ┘           USGS Mars 2020 DEM (planetarymaps.usgs.gov)
-                                              Trek feature services (rover path, sites)
+```mermaid
+flowchart LR
+    subgraph FE["frontend/ · container fe"]
+        direction TB
+        UI["React + TS + Vite + Tailwind<br/>HUD, panels, charts"]
+        CES["CesiumJS viewer (one)<br/>Mars sphere r = 3,396,190 m<br/>2D / 2.5D / 3D"]
+        UI --- CES
+    end
+
+    subgraph BE["backend/ · container be"]
+        direction TB
+        API["FastAPI<br/>/api/health · /api/layers<br/>/api/dem/info · /api/point<br/>/api/route · /api/profile<br/>/api/sites · /api/rover-path"]
+        GIS["rasterio + numpy + scikit-image<br/>DEM in memory"]
+        VOL[("dem-cache volume<br/>not in git")]
+        API --- GIS
+        GIS --- VOL
+    end
+
+    subgraph EXT["Internet sources"]
+        direction TB
+        WMTS["Trek WMTS tiles<br/>trek.nasa.gov"]
+        TER["Trek terrain<br/>marshub.s3"]
+        DEM["USGS Mars 2020 DEM<br/>planetarymaps.usgs.gov"]
+        FEAT["Trek feature services<br/>rover path, sites"]
+    end
+
+    UI <-->|"/api/* JSON"| API
+    WMTS -->|"live tiles, CORS ok"| CES
+    TER -->|"live 3D ground"| CES
+    DEM -->|"first start: download"| VOL
+    FEAT --> API
 ```
 
 **Why images go straight from the browser to Trek:** tiles are many small requests. Sending them through our backend would make the map slower and add nothing. Trek allows it (CORS ✅).
