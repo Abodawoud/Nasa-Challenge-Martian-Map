@@ -33,15 +33,17 @@ No data is stored in this project. All images and 3D ground are loaded live from
 
 ## The landing page
 
-The first screen presents the idea of team **Red Compass**, in the colours of the team logo: navy `#0c1a3d`, red `#e8231f` and white.
+The first screen presents the idea of team **Red Compass**. Colours come from the team logo (navy `#0c1a3d`, red `#e8231f`, white) on black space.
 
 | Part | What it is |
 |---|---|
-| 3D planet | A Three.js Mars globe with the real NASA Viking colour mosaic, a navy-blue glow and two orbit rings (red and white) |
-| Scroll story | GSAP ScrollTrigger: the planet moves beside the text, turns to Jezero (red pin), then moves closer and two route lines are drawn |
-| Sections | Hero · The idea (three steps) · The data (four NASA sources) · Team and call to action |
-| Honesty | Route planning is marked **Coming next**. The route lines on the globe are an illustration, not calculated routes |
-| Entry to the map | Every "Open the map" button leads to `/#/map`. The compass mark in the map's top bar leads back |
+| 3D space scene | Three.js: Mars with the real NASA Viking colour mosaic (a sharper version loads in the background), a blue glow, two orbit rings, stars, and glowing red rocks drifting around |
+| Top bar | Glass pills: "NASA Space Apps Challenge 2026" and the Red Compass mark, the section menu, and the "Open the map" button |
+| Scroll story | GSAP ScrollTrigger: the planet moves beside the text, turns to Jezero (red pin), then shows a START and a GOAL point with two winding routes |
+| Sections | First screen · Mission (three steps) · Data system (four NASA sources) · Interface · About Red Compass |
+| Honesty | Route planning is marked **Coming next**. The two routes and the GOAL point on the globe are an illustration, not calculated routes |
+| Entry to the map | Every "Open the map" / "Launch application" button leads to `/#/map`. The compass mark in the map's top bar leads back |
+| NASA logo | Not used. The NASA insignia needs NASA's permission. The event name is written as text |
 
 The landing page and the map are loaded separately: the landing page does not download the map engine.
 

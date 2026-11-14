@@ -9,6 +9,7 @@ Do not change a decision in code without changing it in PLAN.md first.
 
 - `frontend/`: React + TypeScript + Vite · **Chakra UI 3** for all UI (theme: `src/theme.ts`, colour palette `brand` = the logo's navy) · **Lucide** icons (`lucide-react`) · **CesiumJS only** (one viewer, no second map engine) · Motion + GSAP. No Tailwind: do not add utility class names.
 - Two screens (`src/Root.tsx`): the landing page (`src/landing/`, Three.js globe + GSAP ScrollTrigger, team **Red Compass**, display font Unbounded) and the map at `/#/map` (clean NASA style). Three.js is only for the landing page: the map stays Cesium only.
+- Landing page look (decided with the user, do not change without asking): black space, **blue** glow around a planet in its natural NASA colours (no red tint), red floating rocks, a dark veil for contrast, glass pill bars at the top, display font **Unbounded**, first screen "Find your way on Mars." Do not use the NASA insignia (needs NASA's permission): write the event name as text.
 - **Brand colours come from the Red Compass logo:** navy `#0c1a3d`, red `#e8231f`, white. No other accent colours (no bright blue). The team mark is `src/ui/CompassStar.tsx`.
 - `backend/`: Python 3.12 + FastAPI · rasterio + numpy + scikit-image (`MCP_Geometric` least-cost path).
 - `docker-compose.yml`: `fe` + `be` + a cache volume for the DEM. Run with `docker compose up`.
