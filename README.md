@@ -627,6 +627,8 @@ Each milestone ends with something we can **show**.
 
 | Risk | What could go wrong | Backup plan |
 |---|---|---|
+| Processed map tiles were drawn upside down inside their own square (**found in M0**) | Craters cut at tile edges, horizontal bands, "patchy" ground | ✅ Fixed in `frontend/src/globe/tint.ts`: a processed tile is returned as an `ImageBitmap`, the same form Cesium loads |
+| Several photo mosaics stacked at the same zoom | Visible patches (each mosaic has its own brightness) | ✅ One seamless source per zoom range: Viking (far), aligned Jezero CTX (near), HiRISE (very close only) |
 | Trek terrain tiles have wrong bounding spheres (**found in M0**) | Holes and cut strips in the 3D ground | ✅ Fixed in `frontend/src/globe/trekTerrain.ts`: each tile's sphere is rebuilt for our Mars sphere |
 | Trek terrain service changes or goes down | No 3D hills | Smooth sphere + our own Jezero DEM as terrain |
 | USGS download is slow or down at start-up | Backend has no DEM | The Docker cache volume keeps the first download. Clear error message in the UI |

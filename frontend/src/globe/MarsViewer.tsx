@@ -65,6 +65,10 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     // Smoother moving: keep more tiles in memory and load neighbours early, so dragging
     // does not keep reloading and redrawing the same ground.
     scene.globe.tileCacheSize = 1000
+    // Sharper ground: load one step more detail than Cesium's default (2), and draw at the
+    // screen's real pixel density instead of a reduced one.
+    scene.globe.maximumScreenSpaceError = 1.3
+    viewer.useBrowserRecommendedResolution = false
     scene.globe.preloadSiblings = true
     scene.globe.preloadAncestors = true
     // Only draw a new frame when something changes (saves work when the map is still).

@@ -99,6 +99,19 @@ then `.../ws/index/getLayerServices?uuid=<item_UUID>` gives `endPoint` and `laye
 Perseverance path (ArcGIS feature service): `https://trek.nasa.gov/mars/trekarcgis/rest/services/Perseverance_Traverse_Path/MapServer/0`
 (query with `/query?where=1%3D1&outFields=*&f=geojson`, ⚠️ check CORS, else save a GeoJSON copy to `public/data`).
 
+### Imagery rules learned the hard way (2026-11-14)
+
+- **Never return a canvas from a wrapped `requestImage`.** Cesium loads tiles as `ImageBitmap`
+  objects that are already flipped for WebGL. A canvas gets flipped again on upload, so every
+  tile is mirrored top to bottom inside its own square: craters cut at tile edges, horizontal
+  bands. If you process a tile, draw it on an `OffscreenCanvas` and return
+  `transferToImageBitmap()` (see `src/globe/tint.ts`).
+- **One seamless source per zoom range.** Far: Viking colour. Near: `Jezero_CTX_BlockAdj_dd`
+  (aligned CTX, seamless) over Jezero, global CTX elsewhere. Closest: HiRISE from terrain
+  level 14 only. Do not stack several mosaics at the same zoom: each has its own brightness.
+- The global CTX (Esri OnMars) is "uncontrolled": strips can be offset at seams.
+- To debug imagery, compare with the raw tiles first (draw them on a canvas in the page).
+
 ## 5. Terrain
 
 - Display terrain: Trek's own quantized-mesh service, CORS `*` ✅, levels 0–17 over Jezero ✅.

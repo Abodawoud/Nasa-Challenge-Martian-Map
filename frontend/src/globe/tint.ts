@@ -15,29 +15,36 @@ export type GreyLevels = [low: number, high: number]
 const MARS_TINT = '#9c6b56'
 
 /**
- * Return a canvas with the tile recoloured. Transparent (no-data) pixels stay transparent.
+ * Return the tile recoloured. Transparent (no-data) pixels stay transparent.
  *
- * Fast path: only canvas filters and blend modes, which the browser runs on the GPU.
- * An earlier version changed every pixel in JavaScript, which made dragging the map stutter.
- * 1. grayscale + brightness + contrast stretch the source's grey range to the full range.
+ * IMPORTANT, tile orientation: Cesium loads tiles as ImageBitmap objects that are already
+ * flipped vertically for WebGL, and it uploads them as they are. A canvas, however, is
+ * flipped again by Cesium on upload. An earlier version returned a canvas, so every tile
+ * was mirrored top to bottom inside its own square. That cut craters in half at tile edges
+ * and made horizontal bands. So: an ImageBitmap in means an ImageBitmap out (same
+ * orientation). Only a plain <img> source returns a canvas.
+ *
+ * Fast path: only canvas filters and blend modes, no per-pixel JavaScript.
+ * 1. grayscale + brightness + contrast bring the source's grey range to a common range.
  * 2. The "color" blend mode keeps each pixel's brightness and takes the Mars hue and saturation.
  * 3. "destination-in" puts back the original transparency.
  */
 export function tintToMars(
   image: CanvasImageSource & { width: number; height: number },
   levels: GreyLevels = [0, 255],
-): HTMLCanvasElement {
-  const canvas = document.createElement('canvas')
-  canvas.width = image.width
-  canvas.height = image.height
-  const ctx = canvas.getContext('2d')!
+): HTMLCanvasElement | ImageBitmap {
+  const isBitmap = typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap
+  const canvas = isBitmap
+    ? new OffscreenCanvas(image.width, image.height)
+    : Object.assign(document.createElement('canvas'), { width: image.width, height: image.height })
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
   const [low, high] = levels
   const middle = (low + high) / 2 / 255
   const brightness = 0.5 / middle
-  // Stretch to about half of the full range. A stronger stretch turns bright sand white and
-  // makes the brightness differences between neighbouring photo strips stand out.
-  const contrast = 0.5 / Math.max(0.01, ((high - low) / 255) * brightness)
+  // Bring the source to about half of the full range. Never reduce contrast: a source that
+  // already uses a wide range (the aligned Jezero mosaic) keeps all its sharpness.
+  const contrast = Math.max(1, 0.5 / Math.max(0.01, ((high - low) / 255) * brightness))
   ctx.filter = `grayscale(1) brightness(${brightness.toFixed(3)}) contrast(${contrast.toFixed(3)})`
   ctx.drawImage(image, 0, 0)
   ctx.filter = 'none'
@@ -49,5 +56,5 @@ export function tintToMars(
   ctx.globalCompositeOperation = 'destination-in'
   ctx.drawImage(image, 0, 0)
   ctx.globalCompositeOperation = 'source-over'
-  return canvas
+  return canvas instanceof OffscreenCanvas ? canvas.transferToImageBitmap() : canvas
 }

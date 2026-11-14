@@ -1,6 +1,13 @@
 // Every map layer is one entry here. The layer panel and the viewer are built from this list.
 // Layer ids, formats and zoom levels were read from the services' capabilities on 2026-11-14.
 // Order matters: later layers draw on top of earlier ones.
+//
+// Display rule (decided 2026-11-14 after testing): ONE seamless source per zoom range.
+//   far      Viking colour mosaic
+//   near     Jezero region CTX mosaic, aligned (elsewhere: global CTX)
+//   closest  HiRISE, only from terrain level 14
+// Stacking several mosaics at the same zoom made visible patches, because every mosaic has
+// its own brightness. The raw aligned CTX mosaic alone is seamless.
 
 export type LayerCategory = 'optical' | 'topographic' | 'thermal' | 'spectral' | 'vector'
 
@@ -116,9 +123,11 @@ export const IMAGERY_LAYERS: ImageryLayerConfig[] = [
     maximumLevel: 17,
     bounds: [77.2229331, 18.3067994, 77.583964, 18.669315],
     defaultOpacity: 1,
-    // Hidden by default: HiRISE is many narrow strips taken in different light, so close up
-    // they look like stripes of different brightness. Optional "Ultra-detail" layer later.
-    visible: false,
+    // HiRISE is many narrow strips taken in different light. From far away they look like
+    // stripes, so it only appears when the camera is very close (terrain level 14 and deeper,
+    // roughly below 3 km above the ground). There it adds real 25 cm detail: rocks and ripples.
+    minimumZoomLevel: 14,
+    visible: true,
     source: 'NASA/JPL-Caltech/University of Arizona/USGS, Mars Trek',
     tintToMars: true,
     greyLevels: [38, 150],
