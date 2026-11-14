@@ -307,25 +307,30 @@ We **never** call Route B "safest". Slope is only one danger. Rocks, sand, dust 
 **The three parts:** Screen = **Cesium** (draws Mars) · Pictures = **NASA Trek** (live, nothing stored) · Calculator = **our backend** (uses USGS height numbers).
 
 ```mermaid
-flowchart LR
-    U["👩‍🚀 You<br/>(in the browser)"]
+flowchart TB
+    U["👩‍🚀 You, in the browser"]
 
-    subgraph DOCKER["🐳 Docker: one command starts both"]
-        FE["🖥️ Screen<br/>React + Cesium<br/><i>draws Mars</i>"]
-        BE["🧮 Calculator<br/>FastAPI backend<br/><i>does the maths</i>"]
-        VOL[("💾 Cache box<br/>height file copy")]
+    subgraph DOCKER["🐳 Docker"]
+        direction LR
+        FE["🖥️ Screen<br/>React + Cesium"]
+        BE["🧮 Calculator<br/>FastAPI backend"]
+        VOL[("💾 Cache")]
+        FE <-->|"② route request<br/>③ routes + numbers"| BE
+        BE --- VOL
     end
 
-    TREK["🛰️ NASA Mars Trek<br/>photos, 3D hills,<br/>heat and mineral maps"]
-    USGS["🗺️ USGS<br/>Jezero height file<br/>(numbers)"]
+    subgraph NASA["🌐 Free NASA / USGS data on the internet"]
+        direction LR
+        TREK["🛰️ NASA Mars Trek<br/>photos · 3D hills<br/>heat · minerals"]
+        USGS["🗺️ USGS<br/>Jezero height numbers"]
+    end
 
-    U -->|clicks, zooms| FE
-    FE -->|"asks for pictures<br/>(live, nothing stored)"| TREK
-    FE -->|"asks: route A to B?"| BE
-    BE -->|"answers: 2 routes + numbers"| FE
-    USGS -->|"downloaded once<br/>at start"| BE
-    BE <--> VOL
+    U -->|"clicks and zooms"| FE
+    TREK -->|"① pictures, live"| FE
+    USGS -->|"downloaded once"| BE
 ```
+
+**How to read it:** ① the screen gets Mars pictures straight from NASA Trek. ② When you ask for a route, the screen asks the calculator. ③ The calculator answers with 2 routes and their numbers. It uses the USGS heights, downloaded once and kept in the cache.
 
 **What happens when you ask for a route:**
 
