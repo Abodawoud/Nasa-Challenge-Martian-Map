@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import type * as Cesium from 'cesium'
-import { Box, Button, Flex, Group, Heading, HStack, Kbd, Link, Status, Text } from '@chakra-ui/react'
+import { Box, Button, Flex, Heading, HStack, Link, Status, Text } from '@chakra-ui/react'
 import { Box as Box3D, Map as MapIcon, MapPin, Mouse, Rocket } from 'lucide-react'
 import { MarsViewer, flyToJezero, setViewMode } from './globe/MarsViewer'
 import type { CursorInfo, ViewMode } from './globe/MarsViewer'
@@ -66,58 +67,86 @@ export default function App() {
 
   return (
     // Three rows: top bar, map, status bar. The map has its own area in the middle, so the
-    // bars never cover any part of it.
-    <Flex direction="column" h="100vh" w="full" overflow="hidden">
+    // bars never cover any part of it. Both bars are the navy of the logo, like the start page.
+    <Flex direction="column" h="100vh" w="full" overflow="hidden" bg="brand.900">
       {/* Top bar */}
       <Flex
         as="header"
+        position="relative"
         align="center"
-        gap="4"
-        px="5"
+        gap={{ base: '2', md: '4' }}
+        px={{ base: '3', md: '5' }}
         py="2.5"
-        bg="white"
-        borderBottomWidth="1px"
-        borderColor="gray.200"
-        shadow="sm"
+        color="white"
+        bgGradient="to-r"
+        gradientFrom="brand.800"
+        gradientTo="brand.700"
         zIndex="1"
         flexShrink={0}
       >
-        <Link href="#/" aria-label="Back to the Red Compass start page" _hover={{ textDecoration: 'none' }}>
+        <Link href="#/" aria-label="Back to the Red Compass start page" color="white" borderRadius="lg" _hover={{ textDecoration: 'none', opacity: 0.85 }}>
           <HStack gap="3">
-            <CompassStar size={36} />
-            <Box lineHeight="short">
-              <Heading as="h1" size="sm" color="gray.900">
+            <CompassStar size={38} />
+            <Box lineHeight="1.2">
+              <Heading as="h1" fontSize="md" fontWeight="700" letterSpacing="-0.01em" color="white">
                 Martian Map
               </Heading>
-              <Text fontSize="xs" color="gray.500">
-                Red Compass · Jezero Crater
+              <Text fontSize="xs" color="whiteAlpha.700">
+                Red Compass
               </Text>
             </Box>
           </HStack>
         </Link>
 
-        <Group attached ml="auto" role="group" aria-label="View mode">
+        {/* Where the map is about. */}
+        <HStack gap="1.5" px="3" py="1" borderRadius="full" borderWidth="1px" borderColor="whiteAlpha.300" bg="whiteAlpha.100" fontSize="xs" color="whiteAlpha.900" hideBelow="md">
+          <MapPin size={13} aria-hidden color="#e8231f" />
+          <Text>Jezero Crater · Mars</Text>
+        </HStack>
+
+        {/* 2D / 3D switch: a pill, the chosen side is white. */}
+        <HStack ml="auto" gap="0.5" p="1" borderRadius="full" borderWidth="1px" borderColor="whiteAlpha.300" bg="whiteAlpha.100" role="group" aria-label="View mode">
           {MODES.map(({ mode: m, Icon: ModeIcon, hint }) => (
             <Button
               key={m}
-              size="sm"
-              colorPalette="brand"
-              variant={mode === m ? 'solid' : 'outline'}
-              bg={mode === m ? undefined : 'white'}
+              size="xs"
+              h="7"
+              px="3.5"
+              borderRadius="full"
+              fontWeight="600"
+              bg={mode === m ? 'white' : 'transparent'}
+              color={mode === m ? 'brand.700' : 'whiteAlpha.900'}
+              _hover={{ bg: mode === m ? 'white' : 'whiteAlpha.200' }}
+              _focusVisible={{ outline: '2px solid white', outlineOffset: '2px' }}
               aria-pressed={mode === m}
               title={hint}
               onClick={() => changeMode(m)}
             >
-              <ModeIcon size={16} aria-hidden />
+              <ModeIcon size={14} aria-hidden />
               {m}
             </Button>
           ))}
-        </Group>
+        </HStack>
 
-        <Button size="sm" colorPalette="brand" onClick={() => viewerRef.current && flyToJezero(viewerRef.current)}>
-          <Rocket size={16} aria-hidden />
-          Fly to Jezero
+        <Button
+          size="sm"
+          borderRadius="full"
+          px="4"
+          bg="white"
+          color="brand.700"
+          fontWeight="600"
+          _hover={{ bg: 'brand.50' }}
+          _focusVisible={{ outline: '2px solid white', outlineOffset: '2px' }}
+          onClick={() => viewerRef.current && flyToJezero(viewerRef.current)}
+        >
+          <Rocket size={15} aria-hidden />
+          <Text as="span" hideBelow="sm">
+            Fly to Jezero
+          </Text>
         </Button>
+
+        {/* A thin red line under the bar, from the logo. */}
+        <Box aria-hidden position="absolute" insetX="0" bottom="0" h="2px" bgGradient="to-r" gradientFrom="nasaRed" gradientVia="nasaRed" gradientTo="transparent" />
       </Flex>
 
       {/* The map. "mars-space" + data-sky (set by MarsViewer) draw the space or Mars sky behind it. */}
@@ -131,26 +160,25 @@ export default function App() {
         as="footer"
         wrap="wrap"
         align="center"
-        columnGap="6"
+        columnGap="5"
         rowGap="1"
-        px="5"
+        px={{ base: '3', md: '5' }}
         py="1.5"
         fontSize="xs"
-        color="gray.600"
-        bg="white"
+        color="whiteAlpha.800"
+        bg="brand.800"
         borderTopWidth="1px"
-        borderColor="gray.200"
+        borderColor="whiteAlpha.200"
         flexShrink={0}
       >
-        <HStack gap="1.5" fontVariantNumeric="tabular-nums" minW="230px">
+        <HStack gap="1.5" fontVariantNumeric="tabular-nums" minW="230px" color="white">
           <MapPin size={13} aria-hidden />
           <Text>{cursor ? `Lat ${cursor.lat.toFixed(4)}° · Lon ${cursor.lon.toFixed(4)}° E` : 'Move the mouse over Mars'}</Text>
         </HStack>
-        <HStack gap="1.5" color="gray.500" hideBelow="lg">
+        <HStack gap="1.5" color="whiteAlpha.700" hideBelow="lg">
           <Mouse size={13} aria-hidden />
           <Text>
-            <Kbd size="sm">Drag</Kbd> move · <Kbd size="sm">Ctrl</Kbd> + <Kbd size="sm">Drag</Kbd>{' '}
-            {mode === '2D' ? 'turn' : 'turn and tilt'} · <Kbd size="sm">Wheel</Kbd> zoom
+            <Key>Drag</Key> move · <Key>Ctrl</Key> + <Key>Drag</Key> {mode === '2D' ? 'turn' : 'turn and tilt'} · <Key>Wheel</Key> zoom
           </Text>
         </HStack>
         <StatusItem label="Map" state={tilesLoading ? 'wait' : 'ok'} text={tilesLoading ? 'Loading' : 'Ready'} />
@@ -164,11 +192,20 @@ export default function App() {
           state={api === 'ok' ? 'ok' : api === 'down' ? 'warn' : 'wait'}
           text={api === 'ok' ? 'Connected' : api === 'down' ? 'Not reachable' : 'Checking'}
         />
-        <Text ml="auto" color="gray.500">
+        <Text ml="auto" color="whiteAlpha.600">
           Images and terrain: NASA/JPL-Caltech Mars Trek · USGS
         </Text>
       </Flex>
     </Flex>
+  )
+}
+
+/** A key or mouse action, drawn as a small key cap. */
+function Key({ children }: { children: ReactNode }) {
+  return (
+    <Text as="kbd" px="1.5" py="0.5" borderRadius="sm" borderWidth="1px" borderColor="whiteAlpha.300" bg="whiteAlpha.200" color="white" fontFamily="inherit" fontSize="2xs" fontWeight="600">
+      {children}
+    </Text>
   )
 }
 
@@ -181,10 +218,12 @@ function StatusItem({ label, state, text }: { label: string; state: 'ok' | 'warn
         <Status.Indicator />
       </Status.Root>
       <Text>
-        <Text as="span" fontWeight="medium" color="gray.700">
-          {label}:
+        <Text as="span" color="whiteAlpha.600">
+          {label}
         </Text>{' '}
-        {text}
+        <Text as="span" fontWeight="medium" color="white">
+          {text}
+        </Text>
       </Text>
     </HStack>
   )

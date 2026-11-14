@@ -138,7 +138,7 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
 /** A white rounded card that holds one or two control buttons. */
 function ControlGroup({ children }: { children: ReactNode }) {
   return (
-    <VStack gap="0" bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" shadow="md" overflow="hidden">
+    <VStack gap="0" bg="whiteAlpha.900" backdropFilter="blur(10px)" borderWidth="1px" borderColor="whiteAlpha.600" borderRadius="xl" shadow="lg" overflow="hidden">
       {children}
     </VStack>
   )
@@ -163,7 +163,7 @@ function ControlButton({
       disabled={disabled}
       variant="ghost"
       colorPalette="brand"
-      color="gray.700"
+      color="brand.700"
       size="md"
       borderRadius="0"
     >

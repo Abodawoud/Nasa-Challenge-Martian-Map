@@ -263,10 +263,6 @@ export default function Landing() {
         {/* First screen */}
         <Flex as="section" position="relative" minH="100vh" direction="column" align="center" pt={{ base: '32', md: '36' }} px="5" textAlign="center">
           <VStack data-hero gap="6" maxW="900px">
-            <HStack gap="2" px="3.5" py="1.5" borderRadius="full" borderWidth="1px" borderColor="whiteAlpha.300" bg="blackAlpha.500" fontSize="xs" color="whiteAlpha.900">
-              <Box boxSize="1.5" borderRadius="full" bg={RED} />
-              <Text>NASA Space Apps 2026 · Interplanetary Survival Guide: Martian Map</Text>
-            </HStack>
             <Heading as="h1" fontFamily={DISPLAY_FONT} fontWeight="500" lineHeight="1.05" letterSpacing="-0.02em" fontSize={{ base: '2.6rem', md: '4.4rem', lg: '5.2rem' }}>
               Find your way
               <Box as="span" display="block" color={RED}>
