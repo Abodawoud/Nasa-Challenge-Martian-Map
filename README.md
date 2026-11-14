@@ -625,6 +625,7 @@ Each milestone ends with something we can **show**.
 
 | Risk | What could go wrong | Backup plan |
 |---|---|---|
+| Trek terrain tiles have wrong bounding spheres (**found in M0**) | Holes and cut strips in the 3D ground | ✅ Fixed in `frontend/src/globe/trekTerrain.ts`: each tile's sphere is rebuilt for our Mars sphere |
 | Trek terrain service changes or goes down | No 3D hills | Smooth sphere + our own Jezero DEM as terrain |
 | USGS download is slow or down at start-up | Backend has no DEM | The Docker cache volume keeps the first download. Clear error message in the UI |
 | Backend not hosted publicly in time | Judges can't click a link | Demo video + `docker compose up` instructions. Hosting decided in M7 |

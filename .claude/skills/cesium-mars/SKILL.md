@@ -105,6 +105,12 @@ Perseverance path (ArcGIS feature service): `https://trek.nasa.gov/mars/trekarcg
   `await Cesium.CesiumTerrainProvider.fromUrl('https://marshub.s3.amazonaws.com/mars_v14', { requestVertexNormals: true })`
   ⚠️ Undocumented endpoint. Wrap in try/catch and fall back to `EllipsoidTerrainProvider({ ellipsoid: MARS })`.
 - ✅ Works with our sphere: imagery drapes correctly, 2D, 2.5D and 3D all work (M0, 2026-11-14).
+- ⚠️ **Always load it with `createTrekTerrain()` (`src/globe/trekTerrain.ts`), never with plain
+  `CesiumTerrainProvider.fromUrl`.** Trek's tile headers carry bounding spheres computed for another
+  planet shape (about 12 km and 2 km of height off). Cesium then culls visible tiles, which made
+  holes and "cut" strips. `createTrekTerrain()` rebuilds each sphere from the tile's OBB.
+- Camera limits live in `MarsViewer.tsx`: at least 300 m above the ground, pitch at most −5°,
+  zoom out at most 25,000 km, 2D zoom between 1 km across and the whole map.
 - ⚠️ Its heights use a different zero (+5,639 m at the landing site against about −2,570 m real).
   Never show Trek terrain heights as numbers. ⚠️ M3: check the relief is not vertically stretched
   by comparing height differences (delta top against crater floor) with the USGS DEM.

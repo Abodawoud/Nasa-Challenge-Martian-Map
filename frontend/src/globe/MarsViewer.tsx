@@ -1,12 +1,20 @@
 import { useEffect, useRef } from 'react'
 import * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
-import { MARS_ELLIPSOID, MARS_TILING, PERSEVERANCE_LANDING, TREK_TERRAIN_URL } from './mars'
+import { MARS_ELLIPSOID, MARS_TILING, PERSEVERANCE_LANDING } from './mars'
+import { createTrekTerrain } from './trekTerrain'
 import { IMAGERY_LAYERS, TREK_TILE_ROOT } from './layers.config'
 import type { TrekImageryLayer } from './layers.config'
 import { tintToMars } from './tint'
 
 export type ViewMode = '2D' | '2.5D' | '3D'
+
+/** The camera always stays at least this high above the 3D ground. */
+const MIN_CAMERA_ABOVE_GROUND_M = 300
+/** Furthest zoom out: about 7 Mars radii, the whole planet with space around it. */
+const MAX_CAMERA_DISTANCE_M = 25_000_000
+/** Steepest upward tilt allowed: 5° below the horizon. */
+const MAX_PITCH_RAD = Cesium.Math.toRadians(-5)
 
 export interface CursorInfo {
   lon: number
@@ -106,6 +114,55 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     }
     scene.preRender.addEventListener(clamp2D)
 
+    // Zoom and tilt limits, so the camera never goes into or under the ground.
+    const ssc = scene.screenSpaceCameraController
+    ssc.enableCollisionDetection = true
+    ssc.minimumZoomDistance = MIN_CAMERA_ABOVE_GROUND_M
+    ssc.maximumZoomDistance = MAX_CAMERA_DISTANCE_M
+
+    const keepCameraSafe = () => {
+      if (scene.mode === Cesium.SceneMode.MORPHING) return
+      const camera = viewer.camera
+
+      if (scene.mode === Cesium.SceneMode.SCENE2D) {
+        // 2D: don't zoom out further than the whole map, or in closer than ~1 km across.
+        const f = camera.frustum as Cesium.OrthographicOffCenterFrustum
+        if (f.right === undefined || f.left === undefined || f.top === undefined || f.bottom === undefined) return
+        const width = f.right - f.left
+        const maxWidth = 2 * halfWorldX
+        const target = width > maxWidth ? maxWidth : width < 1_000 ? 1_000 : width
+        if (target !== width) {
+          const k = target / width
+          f.right *= k
+          f.left *= k
+          f.top *= k
+          f.bottom *= k
+        }
+        return
+      }
+
+      // 3D and 2.5D: never look up past the horizon.
+      if (Number.isFinite(camera.pitch) && camera.pitch > MAX_PITCH_RAD) {
+        camera.setView({ orientation: { heading: camera.heading, pitch: MAX_PITCH_RAD, roll: 0 } })
+      }
+
+      // Stay above the 3D ground (Trek terrain heights, see README section 12).
+      const carto = camera.positionCartographic
+      const ground = scene.globe.getHeight(carto)
+      if (ground !== undefined && carto.height < ground + MIN_CAMERA_ABOVE_GROUND_M) {
+        camera.setView({
+          destination: Cesium.Cartesian3.fromRadians(
+            carto.longitude,
+            carto.latitude,
+            ground + MIN_CAMERA_ABOVE_GROUND_M,
+            MARS_ELLIPSOID,
+          ),
+          orientation: { heading: camera.heading, pitch: camera.pitch, roll: 0 },
+        })
+      }
+    }
+    scene.preRender.addEventListener(keepCameraSafe)
+
     for (const layer of IMAGERY_LAYERS) {
       const imagery = viewer.imageryLayers.addImageryProvider(makeTrekProvider(layer))
       imagery.alpha = layer.defaultOpacity
@@ -113,10 +170,7 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     }
 
     // Trek's own terrain. If it fails, fall back to a smooth sphere (README risk list).
-    Cesium.CesiumTerrainProvider.fromUrl(TREK_TERRAIN_URL, {
-      ellipsoid: MARS_ELLIPSOID,
-      requestVertexNormals: true,
-    })
+    createTrekTerrain()
       .then(async (terrain) => {
         if (destroyed) return
         viewer.terrainProvider = terrain
