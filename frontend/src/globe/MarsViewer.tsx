@@ -14,8 +14,8 @@ const MIN_CAMERA_ABOVE_GROUND_M = 300
 const MAX_CAMERA_DISTANCE_M = 25_000_000
 /** Steepest upward tilt allowed: 5° below the horizon. */
 const MAX_PITCH_RAD = Cesium.Math.toRadians(-5)
-/** 2.5D: steepest upward tilt (keeps the far map edge out of view). */
-const MAX_PITCH_CV_RAD = Cesium.Math.toRadians(-40)
+/** 2.5D: the fixed tilt (keeps the far map edge out of view). */
+const PITCH_CV_RAD = Cesium.Math.toRadians(-50)
 /** 2.5D: highest camera, so the flat map always fills the screen. */
 const MAX_HEIGHT_CV_M = 400_000
 
@@ -52,6 +52,7 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
       infoBox: false,
       selectionIndicator: false,
       fullscreenButton: false,
+      showRenderLoopErrors: false,
       // 2D map has real left and right edges, no endless horizontal scrolling.
       mapMode2D: Cesium.MapMode2D.ROTATE,
       // Transparent canvas, so the page's space gradient shows behind the map (no flat black).
@@ -127,29 +128,31 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
         return
       }
 
-      // 2.5D: the flat map must fill the screen. Limit the height, keep the camera tilted
-      // down enough that the far edge stays out of view, and keep the camera away from the
-      // map edges. With a 60° view, a -40° tilt sees the ground up to about 6 heights ahead.
+      // 2.5D: the flat map must fill the screen. The tilt is fixed in this mode (see
+      // applyModeLimits), so here we only keep the height and position inside the map.
+      // With a 60° view and a -50° tilt, the ground is visible up to about 6 heights ahead.
       if (scene.mode === Cesium.SceneMode.COLUMBUS_VIEW) {
-        if (Number.isFinite(camera.pitch) && camera.pitch > MAX_PITCH_CV_RAD) {
-          camera.setView({ orientation: { heading: camera.heading, pitch: MAX_PITCH_CV_RAD, roll: 0 } })
-        }
         const p = camera.position
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return
         if (p.z > MAX_HEIGHT_CV_M) p.z = MAX_HEIGHT_CV_M
         const margin = p.z * 6.5
         const limit = (value: number, world: number) =>
           margin >= world ? 0 : Math.min(world - margin, Math.max(-world + margin, value))
         p.x = limit(p.x, halfWorldX)
         p.y = limit(p.y, halfWorldY)
+        return
       }
 
-      // 3D and 2.5D: never look up past the horizon.
-      if (Number.isFinite(camera.pitch) && camera.pitch > MAX_PITCH_RAD) {
-        camera.setView({ orientation: { heading: camera.heading, pitch: MAX_PITCH_RAD, roll: 0 } })
+      // 3D: never look up past the horizon.
+      const { heading, pitch } = camera
+      if (!Number.isFinite(heading) || !Number.isFinite(pitch)) return
+      if (pitch > MAX_PITCH_RAD) {
+        camera.setView({ orientation: { heading, pitch: MAX_PITCH_RAD, roll: 0 } })
       }
 
-      // Stay above the 3D ground (Trek terrain heights, see README section 12).
+      // 3D: stay above the ground (Trek terrain heights, see README section 12).
       const carto = camera.positionCartographic
+      if (!carto || !Number.isFinite(carto.height)) return
       const ground = scene.globe.getHeight(carto)
       if (ground !== undefined && carto.height < ground + MIN_CAMERA_ABOVE_GROUND_M) {
         camera.setView({
@@ -159,11 +162,36 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
             ground + MIN_CAMERA_ABOVE_GROUND_M,
             MARS_ELLIPSOID,
           ),
-          orientation: { heading: camera.heading, pitch: camera.pitch, roll: 0 },
+          orientation: { heading, pitch: camera.pitch, roll: 0 },
         })
       }
     }
-    scene.preRender.addEventListener(keepCameraSafe)
+    // A camera rule must never stop the map from drawing.
+    scene.preRender.addEventListener(() => {
+      try {
+        keepCameraSafe()
+      } catch (err) {
+        console.warn('[MarsViewer] camera limit skipped this frame', err)
+      }
+    })
+
+    // Per-mode limits: 2.5D has a fixed tilt and a lower zoom-out limit.
+    const applyModeLimits = () => {
+      const cv = scene.mode === Cesium.SceneMode.COLUMBUS_VIEW
+      ssc.enableTilt = !cv
+      ssc.maximumZoomDistance = cv ? MAX_HEIGHT_CV_M : MAX_CAMERA_DISTANCE_M
+    }
+    applyModeLimits()
+    scene.morphComplete.addEventListener(applyModeLimits)
+
+    // Safety net: if any rendering error still happens, log it and keep drawing,
+    // instead of freezing the map behind Cesium's red error box.
+    scene.renderError.addEventListener((_scene, error) => {
+      console.error('[MarsViewer] render error, restarting the render loop', error)
+      setTimeout(() => {
+        if (!viewer.isDestroyed()) viewer.useDefaultRenderLoop = true
+      }, 0)
+    })
 
     addImageryLayers(viewer, IMAGERY_LAYERS)
 
@@ -270,6 +298,14 @@ export function flyToJezero(viewer: Cesium.Viewer, duration = 4) {
   const { lon, lat } = PERSEVERANCE_LANDING
   if (viewer.scene.mode === Cesium.SceneMode.SCENE2D) {
     viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(lon, lat, 60_000, MARS_ELLIPSOID), duration })
+    return
+  }
+  if (viewer.scene.mode === Cesium.SceneMode.COLUMBUS_VIEW) {
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.35, 30_000, MARS_ELLIPSOID),
+      orientation: { heading: 0, pitch: PITCH_CV_RAD, roll: 0 },
+      duration,
+    })
     return
   }
   // Trek terrain at Jezero sits about +5.6 km on its own height scale, so the camera
