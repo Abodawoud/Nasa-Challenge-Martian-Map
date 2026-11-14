@@ -46,9 +46,12 @@ No data is stored in this project. All images and 3D ground are loaded live from
 
 | | 3D near the ground (below 300 km) | 3D far away (globe) | 2D and 2.5D |
 |---|---|---|---|
-| **Drag** | Move over the ground, the point you grab follows the mouse | Spin the planet | Move the map |
-| **Ctrl + drag** or **middle drag** | Turn left or right, tilt up or down, around the screen centre | Tilt | Turn (2.5D tilt is fixed at −50°) |
+| **Drag** | Move over the ground. The point you grab stays under the cursor, with a short glide when you let go | Spin the planet | Move the map |
+| **Ctrl + drag** or **middle drag** | Right / left turns the view around the screen centre. Up tilts towards the horizon, down tilts towards a top view | Tilt | Turn (2.5D tilt is fixed at −50°) |
+| **Drag on the sky** | Look around in place | | |
 | **Wheel** | Zoom | Zoom | Zoom |
+
+A short reminder of these is shown in the bottom bar.
 
 ### Limits (so the view never breaks)
 
@@ -132,7 +135,7 @@ These are worth knowing if you change the map code. Details are in `PLAN.md` (se
 | Craters cut in half, horizontal bands | Tinted tiles were drawn upside down inside their own square | The tint returns tiles in the same form Cesium loads them (`tint.ts`) |
 | Patchy colours | Several photo mosaics stacked at the same zoom | One seamless source per zoom range |
 | Sunlit slopes turned white | The tint kept each pixel's brightness, and very bright pixels can't hold colour | The photo is multiplied by a light Mars tan, like a colour filter: the brightest result is tan, never white (`tint.ts`) |
-| Dragging in 3D moved the wrong way | Cesium's drag grabs the smooth sphere, 5.6 km below Trek's ground | Own controls near the ground (`groundControls.ts`) |
+| Dragging in 3D moved the wrong way, the ground slid under the cursor | Cesium's drag grabs the smooth sphere, 5.6 km below Trek's ground. A first own version only estimated the movement (up to 150 px off) | Own controls with exact geometry: 0 px error in tests (`groundControls.ts`) |
 | Map stopped drawing ("not a number" error) | A tilt correction every frame in 2.5D | Fixed tilt in 2.5D, safe camera rules, and an error safety net |
 | Camera went through the ground in 2.5D | Cesium's ground check does not work there with this terrain | Own 25 m ground floor |
 

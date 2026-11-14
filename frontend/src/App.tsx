@@ -79,6 +79,9 @@ export default function App() {
         <span className="tabular-nums">
           {cursor ? `Lat ${cursor.lat.toFixed(4)}° · Lon ${cursor.lon.toFixed(4)}° E` : 'Move the mouse over Mars'}
         </span>
+        <span className="hidden text-slate-500 lg:inline">
+          <Key>Drag</Key> move · <Key>Ctrl</Key> + <Key>Drag</Key> turn and tilt · <Key>Wheel</Key> zoom
+        </span>
         <StatusDot label="3D ground" state={terrain === 'trek' ? 'ok' : terrain === 'flat' ? 'warn' : 'wait'}
           text={terrain === 'trek' ? 'NASA Trek terrain' : terrain === 'flat' ? 'Smooth sphere (Trek terrain failed)' : 'Loading'} />
         <StatusDot label="Backend" state={api === 'ok' ? 'ok' : api === 'down' ? 'warn' : 'wait'}
@@ -96,5 +99,13 @@ function StatusDot({ label, state, text }: { label: string; state: 'ok' | 'warn'
       <span className={`h-2 w-2 rounded-full ${color}`} aria-hidden />
       <span className="font-medium text-slate-700">{label}:</span> {text}
     </span>
+  )
+}
+
+function Key({ children }: { children: string }) {
+  return (
+    <kbd className="rounded border border-slate-300 bg-slate-50 px-1 py-px font-sans text-[11px] font-medium text-slate-700">
+      {children}
+    </kbd>
   )
 }

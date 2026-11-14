@@ -2,14 +2,15 @@
 //
 // Why: Cesium's built-in 3D drag "grabs" the smooth Mars sphere. Trek's terrain sits about
 // 5.6 km above that sphere (different height zero, PLAN.md section 12), so near the ground the
-// grabbed point was wrong and dragging moved the camera in odd directions (tested 2026-11-14:
-// dragging up moved the camera south). These controls work on the real ground instead:
+// grabbed point was wrong and dragging moved the camera in odd directions.
 //
-//   drag            move over the ground, the grabbed point follows the mouse
-//   Ctrl + drag     orbit around the ground point at the screen centre:
-//                   left / right turns, up / down tilts
-//   middle drag     same as Ctrl + drag
-//   wheel           zoom (Cesium's own, unchanged)
+//   drag                 move over the ground. The point you grab stays under the cursor
+//                        (exact, measured in tests), with a short glide after release.
+//   Ctrl + drag          turn and tilt around the ground point you grabbed
+//   middle drag          same as Ctrl + drag
+//   drag on the sky      look around in place
+//   wheel / right drag   zoom (Cesium's own, unchanged)
+//   Shift + drag         free look (Cesium's own, unchanged)
 //
 // Far from the ground (the whole globe) Cesium's own controls are used: they work well there.
 import * as Cesium from 'cesium'
@@ -18,114 +19,230 @@ import * as Cesium from 'cesium'
 export const GROUND_CONTROLS_BELOW_M = 300_000
 /** Orbit speed: radians per pixel of mouse movement. */
 const ORBIT_RAD_PER_PX = 0.005
-/** Tilt range while orbiting: from straight down to 2° below the horizon. */
+/** Tilt range: from straight down to slightly below the horizon (orbit), or above it (look). */
 const MIN_PITCH = Cesium.Math.toRadians(-89)
-const MAX_PITCH = Cesium.Math.toRadians(-2)
+const MAX_PITCH_ORBIT = Cesium.Math.toRadians(-4)
+const MAX_PITCH_LOOK = Cesium.Math.toRadians(15)
+/** Glide after releasing a drag: how fast it fades (milliseconds). */
+const GLIDE_FADE_MS = 150
+/** A release counts as a "throw" only if the mouse was still moving this recently. */
+const GLIDE_MAX_PAUSE_MS = 60
 
-type DragMode = 'pan' | 'orbit'
+type Drag =
+  | { mode: 'pan'; grab: Cesium.Cartesian3; radius: number; maxDistance: number }
+  | { mode: 'orbit'; pivot: Cesium.Cartesian3; x: number; y: number; minHeight: number }
+  | { mode: 'look'; x: number; y: number; style: 'grab' | 'steer' }
 
-export function installGroundControls(viewer: Cesium.Viewer, heightAboveGround: () => number) {
+export function installGroundControls(
+  viewer: Cesium.Viewer,
+  heightAboveGround: () => number,
+  /** Called when the user grabs the map, so running camera flights can be cancelled. */
+  onGrab: () => void = () => {},
+) {
   const { scene, camera } = viewer
   const canvas = scene.canvas
   const ssc = scene.screenSpaceCameraController
   const ellipsoid = scene.globe.ellipsoid
 
-  let drag: { mode: DragMode; last: Cesium.Cartesian2; metresPerPixel: number; pivot?: Cesium.Cartesian3 } | null =
-    null
+  let drag: Drag | null = null
+  let glide: { axis: Cesium.Cartesian3; radPerMs: number } | null = null
+  let lastPan: { axis: Cesium.Cartesian3; radPerMs: number; time: number } | null = null
+  let lastMoveTime = 0
+  let lastFrameTime = performance.now()
 
   const active = () => scene.mode === Cesium.SceneMode.SCENE3D && heightAboveGround() < GROUND_CONTROLS_BELOW_M
 
-  // Switch Cesium's own drag and tilt off while ours are active, back on for the far globe.
-  const syncCesiumControls = () => {
-    if (scene.mode !== Cesium.SceneMode.SCENE3D) return
-    const ours = active()
-    ssc.enableRotate = !ours
-    ssc.enableTilt = !ours
-    ssc.enableTranslate = !ours
+  const mousePosition = (event: PointerEvent) => {
+    const rect = canvas.getBoundingClientRect()
+    return new Cesium.Cartesian2(event.clientX - rect.left, event.clientY - rect.top)
   }
-  scene.preRender.addEventListener(syncCesiumControls)
 
   const pickGround = (position: Cesium.Cartesian2) => {
     const ray = camera.getPickRay(position)
     return ray ? scene.globe.pick(ray, scene) : undefined
   }
 
-  /** Metres on the ground per screen pixel, at the given ground point. */
-  const metresPerPixelAt = (point: Cesium.Cartesian3 | undefined) => {
-    const distance = point ? Cesium.Cartesian3.distance(camera.positionWC, point) : heightAboveGround()
-    const frustum = camera.frustum as Cesium.PerspectiveFrustum
-    const fovy = frustum.fovy ?? Cesium.Math.toRadians(60)
-    return (2 * distance * Math.tan(fovy / 2)) / Math.max(1, canvas.clientHeight)
+  /** Turn the whole camera (position and view) around the planet centre. */
+  const rotateCameraAroundCentre = (axis: Cesium.Cartesian3, angle: number) => {
+    const rotation = Cesium.Matrix3.fromQuaternion(Cesium.Quaternion.fromAxisAngle(axis, angle))
+    camera.setView({
+      destination: Cesium.Matrix3.multiplyByVector(rotation, camera.positionWC, new Cesium.Cartesian3()),
+      orientation: {
+        direction: Cesium.Matrix3.multiplyByVector(rotation, camera.directionWC, new Cesium.Cartesian3()),
+        up: Cesium.Matrix3.multiplyByVector(rotation, camera.upWC, new Cesium.Cartesian3()),
+      },
+    })
   }
 
-  const start = (mode: DragMode) => (event: { position: Cesium.Cartesian2 }) => {
-    if (!active()) return
-    const grabbed = pickGround(event.position)
-    const centre = new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2)
-    drag = {
-      mode,
-      last: Cesium.Cartesian2.clone(event.position),
-      metresPerPixel: metresPerPixelAt(grabbed),
-      pivot: mode === 'orbit' ? pickGround(centre) : undefined,
-    }
-    canvas.style.cursor = mode === 'pan' ? 'grabbing' : 'move'
+  /**
+   * Pan: find where the cursor's ray meets the sphere that passes through the grabbed point,
+   * then turn the camera around the planet centre so the grabbed point comes under the cursor.
+   * Height and tilt stay the same.
+   */
+  const pan = (state: Extract<Drag, { mode: 'pan' }>, position: Cesium.Cartesian2, now: number) => {
+    const ray = camera.getPickRay(position)
+    if (!ray) return
+    const hit = Cesium.IntersectionTests.raySphere(ray, new Cesium.BoundingSphere(Cesium.Cartesian3.ZERO, state.radius))
+    if (!hit) return // the cursor is above the horizon
+    const along = hit.start > 0 ? hit.start : hit.stop
+    if (!(along > 0) || along > state.maxDistance) return // too close to the horizon: would jump far
+    const under = Cesium.Ray.getPoint(ray, along)
+    const from = Cesium.Cartesian3.normalize(under, new Cesium.Cartesian3())
+    const to = Cesium.Cartesian3.normalize(state.grab, new Cesium.Cartesian3())
+    const angle = Cesium.Cartesian3.angleBetween(from, to)
+    if (!(angle > 1e-12)) return
+    const axis = Cesium.Cartesian3.normalize(Cesium.Cartesian3.cross(from, to, new Cesium.Cartesian3()), new Cesium.Cartesian3())
+    rotateCameraAroundCentre(axis, angle)
+    const dt = Math.max(1, now - lastMoveTime)
+    lastPan = { axis, radPerMs: angle / dt, time: now }
   }
 
-  const move = (event: { endPosition: Cesium.Cartesian2 }) => {
-    if (!drag) return
-    const dx = event.endPosition.x - drag.last.x
-    const dy = event.endPosition.y - drag.last.y
-    drag.last = Cesium.Cartesian2.clone(event.endPosition)
-    if (dx === 0 && dy === 0) return
-
-    if (drag.mode === 'pan') {
-      // Directions along the ground: "forward" is where the camera looks, flattened.
-      const up = ellipsoid.geodeticSurfaceNormal(camera.positionWC, new Cesium.Cartesian3())
-      const flatten = (v: Cesium.Cartesian3) => {
-        const along = Cesium.Cartesian3.multiplyByScalar(up, Cesium.Cartesian3.dot(v, up), new Cesium.Cartesian3())
-        return Cesium.Cartesian3.subtract(v, along, new Cesium.Cartesian3())
-      }
-      let forward = flatten(camera.directionWC)
-      if (Cesium.Cartesian3.magnitude(forward) < 1e-3) forward = flatten(camera.upWC) // looking straight down
-      Cesium.Cartesian3.normalize(forward, forward)
-      const right = Cesium.Cartesian3.normalize(Cesium.Cartesian3.cross(forward, up, new Cesium.Cartesian3()), new Cesium.Cartesian3())
-      // The grabbed ground follows the mouse: drag right -> camera moves left, drag down -> forward.
-      // Forward movement on a tilted view covers more ground per pixel, so it is scaled by the tilt.
-      const tilt = Math.max(0.2, Math.abs(Math.sin(camera.pitch)))
-      camera.move(right, -dx * drag.metresPerPixel)
-      camera.move(forward, (dy * drag.metresPerPixel) / tilt)
-    } else if (drag.pivot) {
-      // Orbit around the centre point: turn with left / right, tilt with up / down.
-      const pitchBefore = camera.pitch
-      const tiltBy = -dy * ORBIT_RAD_PER_PX
-      const allowedTilt = Math.min(Math.max(tiltBy, MIN_PITCH - pitchBefore), MAX_PITCH - pitchBefore)
-      camera.lookAtTransform(Cesium.Transforms.eastNorthUpToFixedFrame(drag.pivot, ellipsoid))
+  /**
+   * Orbit: turn and tilt around a fixed ground point.
+   * Tilting up swings the camera down towards the ground. It stops when the camera would go
+   * below a quarter of the height it had when the drag started (at least 30 m). Without this
+   * a long tilt dropped the camera onto the ground, looking at the sky.
+   */
+  const orbit = (state: Extract<Drag, { mode: 'orbit' }>, dx: number, dy: number) => {
+    const turnAndTilt = (tilt: number) => {
+      camera.lookAtTransform(Cesium.Transforms.eastNorthUpToFixedFrame(state.pivot, ellipsoid))
       camera.rotateRight(-dx * ORBIT_RAD_PER_PX)
-      camera.rotateUp(allowedTilt)
+      if (tilt !== 0) camera.rotateUp(tilt)
       camera.lookAtTransform(Cesium.Matrix4.IDENTITY)
     }
+    const pitch = camera.pitch
+    const wanted = -dy * ORBIT_RAD_PER_PX
+    const tilt = Math.min(Math.max(wanted, MIN_PITCH - pitch), Math.max(0, MAX_PITCH_ORBIT - pitch))
+    const before = {
+      destination: camera.positionWC.clone(),
+      orientation: { direction: camera.directionWC.clone(), up: camera.upWC.clone() },
+    }
+    turnAndTilt(tilt)
+    if (tilt > 0 && heightAboveGround() < state.minHeight) {
+      camera.setView(before)
+      turnAndTilt(0) // keep the turn, drop the tilt
+    }
+  }
+
+  /**
+   * Look around in place (used when there is no nearby ground point to orbit around).
+   * 'grab'  : plain drag on the sky. The scene follows the mouse.
+   * 'steer' : Ctrl + drag. Same directions as orbit: right turns right, up tilts up.
+   */
+  const look = (dx: number, dy: number, style: 'grab' | 'steer') => {
+    const frustum = camera.frustum as Cesium.PerspectiveFrustum
+    const grabRadPerPx = (frustum.fovy ?? Cesium.Math.toRadians(60)) / Math.max(1, canvas.clientHeight)
+    const turn = style === 'steer' ? dx * ORBIT_RAD_PER_PX : -dx * grabRadPerPx
+    const wanted = style === 'steer' ? -dy * ORBIT_RAD_PER_PX : dy * grabRadPerPx
+    const up = ellipsoid.geodeticSurfaceNormal(camera.positionWC, new Cesium.Cartesian3())
+    camera.look(up, turn)
+    const pitch = camera.pitch
+    camera.lookUp(Math.min(Math.max(wanted, MIN_PITCH - pitch), Math.max(0, MAX_PITCH_LOOK - pitch)))
+  }
+
+  const onPointerDown = (event: PointerEvent) => {
+    if (!active() || event.shiftKey) return
+    const wantsOrbit = event.button === 1 || (event.button === 0 && event.ctrlKey)
+    if (event.button !== 0 && !wantsOrbit) return
+    if (event.button === 1) event.preventDefault() // no browser auto-scroll
+
+    onGrab()
+    camera.cancelFlight()
+    glide = null
+    lastPan = null
+    const position = mousePosition(event)
+    const ground = pickGround(position)
+    const height = Math.max(heightAboveGround(), 50)
+    lastMoveTime = performance.now()
+
+    if (wantsOrbit) {
+      // Orbit around the ground point at the screen centre (predictable, like other 3D maps).
+      // If the centre shows sky or a far horizon, use the point under the mouse. If that is
+      // also far or sky, steer the view in place. All three use the same directions.
+      const isNear = (point: Cesium.Cartesian3 | undefined): point is Cesium.Cartesian3 =>
+        !!point && Cesium.Cartesian3.distance(camera.positionWC, point) < Math.max(40 * height, 20_000)
+      const centre = pickGround(new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2))
+      const pivot = isNear(centre) ? centre : isNear(ground) ? ground : undefined
+      drag = pivot
+        ? { mode: 'orbit', pivot, x: position.x, y: position.y, minHeight: Math.max(30, heightAboveGround() * 0.25) }
+        : { mode: 'look', x: position.x, y: position.y, style: 'steer' }
+    } else if (ground) {
+      const distance = Cesium.Cartesian3.distance(camera.positionWC, ground)
+      drag = { mode: 'pan', grab: ground, radius: Cesium.Cartesian3.magnitude(ground), maxDistance: Math.max(distance * 4, height * 8) }
+    } else {
+      drag = { mode: 'look', x: position.x, y: position.y, style: 'grab' } // grabbed the sky
+    }
+    canvas.setPointerCapture?.(event.pointerId)
+    canvas.style.cursor = drag.mode === 'pan' ? 'grabbing' : 'move'
+  }
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!drag) return
+    const position = mousePosition(event)
+    const now = performance.now()
+    if (drag.mode === 'pan') {
+      pan(drag, position, now)
+    } else {
+      const dx = position.x - drag.x
+      const dy = position.y - drag.y
+      drag.x = position.x
+      drag.y = position.y
+      if (drag.mode === 'orbit') orbit(drag, dx, dy)
+      else look(dx, dy, drag.style)
+    }
+    lastMoveTime = now
     scene.requestRender()
   }
 
-  const end = () => {
+  const endDrag = () => {
+    if (!drag) return
+    // A quick release while moving keeps the map gliding for a moment.
+    if (drag.mode === 'pan' && lastPan && performance.now() - lastPan.time < GLIDE_MAX_PAUSE_MS) {
+      glide = { axis: lastPan.axis, radPerMs: lastPan.radPerMs }
+    }
     drag = null
-    canvas.style.cursor = ''
+    scene.requestRender()
   }
 
-  const handler = new Cesium.ScreenSpaceEventHandler(canvas)
-  const CTRL = Cesium.KeyboardEventModifier.CTRL
-  handler.setInputAction(start('pan'), Cesium.ScreenSpaceEventType.LEFT_DOWN)
-  handler.setInputAction(start('orbit'), Cesium.ScreenSpaceEventType.LEFT_DOWN, CTRL)
-  handler.setInputAction(start('orbit'), Cesium.ScreenSpaceEventType.MIDDLE_DOWN)
-  handler.setInputAction(move, Cesium.ScreenSpaceEventType.MOUSE_MOVE)
-  handler.setInputAction(move, Cesium.ScreenSpaceEventType.MOUSE_MOVE, CTRL)
-  for (const type of [Cesium.ScreenSpaceEventType.LEFT_UP, Cesium.ScreenSpaceEventType.MIDDLE_UP]) {
-    handler.setInputAction(end, type)
-    handler.setInputAction(end, type, CTRL)
+  const onFrame = () => {
+    const now = performance.now()
+    const dt = Math.min(50, now - lastFrameTime)
+    lastFrameTime = now
+
+    if (scene.mode === Cesium.SceneMode.SCENE3D) {
+      // Cesium's own drag and tilt are off while ours are active, back on for the far globe.
+      const ours = active()
+      ssc.enableRotate = !ours
+      ssc.enableTilt = !ours
+      ssc.enableTranslate = !ours
+      if (!drag) canvas.style.cursor = ours ? 'grab' : ''
+    } else if (!drag) {
+      canvas.style.cursor = ''
+    }
+
+    if (glide && !drag) {
+      rotateCameraAroundCentre(glide.axis, glide.radPerMs * dt)
+      glide.radPerMs *= Math.exp(-dt / GLIDE_FADE_MS)
+      // Stop when the movement is below about a tenth of a metre per frame.
+      if (glide.radPerMs * dt * ellipsoid.maximumRadius < 0.1) glide = null
+      else scene.requestRender()
+    }
   }
+
+  canvas.addEventListener('pointerdown', onPointerDown)
+  canvas.addEventListener('pointermove', onPointerMove)
+  canvas.addEventListener('pointerup', endDrag)
+  canvas.addEventListener('pointercancel', endDrag)
+  window.addEventListener('blur', endDrag)
+  scene.preRender.addEventListener(onFrame)
 
   return () => {
-    scene.preRender.removeEventListener(syncCesiumControls)
-    handler.destroy()
+    canvas.removeEventListener('pointerdown', onPointerDown)
+    canvas.removeEventListener('pointermove', onPointerMove)
+    canvas.removeEventListener('pointerup', endDrag)
+    canvas.removeEventListener('pointercancel', endDrag)
+    window.removeEventListener('blur', endDrag)
+    scene.preRender.removeEventListener(onFrame)
+    canvas.style.cursor = ''
   }
 }

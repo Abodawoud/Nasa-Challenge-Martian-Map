@@ -117,7 +117,10 @@ Perseverance path (ArcGIS feature service): `https://trek.nasa.gov/mars/trekarcg
 Cesium's own 3D drag and tilt grab the smooth sphere, which is about 5.6 km below Trek's ground,
 so near the surface they move the camera the wrong way (worse after a Ctrl + drag tilt).
 `src/globe/groundControls.ts` replaces them below 300 km above the ground: drag = move over the
-ground, Ctrl + drag (or middle drag) = orbit around the screen-centre ground point. Do not
+ground (exact: the cursor ray is intersected with the sphere through the grabbed point, then the
+camera is rotated around the planet centre), Ctrl + drag (or middle drag) = orbit around the
+screen-centre ground point, with a height floor so tilting never drops the camera to the ground.
+Test any change by checking that a grabbed point ends under the cursor (0 px error). Do not
 re-enable Cesium's rotate / tilt / translate in 3D near the ground.
 
 ## 5. Terrain

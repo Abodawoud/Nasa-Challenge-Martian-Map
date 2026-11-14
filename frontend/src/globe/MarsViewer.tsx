@@ -377,6 +377,8 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
       const measured = scene.globe.getHeight(carto)
       if (measured !== undefined) lastGroundHeight = measured
       return carto.height - (measured ?? lastGroundHeight)
+    }, () => {
+      jezeroFlight++ // the user took control: no automatic descent afterwards
     })
 
     onReady(viewer)
@@ -414,6 +416,9 @@ export function setViewMode(viewer: Cesium.Viewer, mode: ViewMode) {
   else scene.morphTo3D(duration)
 }
 
+/** Counts "Fly to Jezero" flights, so a paused flight knows when it has been replaced or cancelled. */
+let jezeroFlight = 0
+
 /** How long the camera rests above Jezero before descending. */
 const OVERVIEW_PAUSE_MS = 800
 
@@ -439,6 +444,7 @@ export function flyToJezero(viewer: Cesium.Viewer, duration = 4) {
   // Trek terrain at Jezero sits about +5.6 km on its own height scale (PLAN.md section 12),
   // so the final height is measured from the real ground under the camera.
   const camera = viewer.camera
+  const flight = ++jezeroFlight
   const ground = viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(lon, lat)) ?? 5_640
   const overview = {
     destination: Cesium.Cartesian3.fromDegrees(lon, lat, ground + 120_000, MARS_ELLIPSOID),
@@ -455,7 +461,8 @@ export function flyToJezero(viewer: Cesium.Viewer, duration = 4) {
     // A short pause above the crater, so the area is understood before the descent.
     complete: () =>
       setTimeout(() => {
-        if (viewer.isDestroyed()) return
+        // Skip the descent if the user grabbed the map during the pause, or a newer flight started.
+        if (viewer.isDestroyed() || flight !== jezeroFlight) return
         camera.flyTo({
           ...descent,
           duration: duration * 0.8,
