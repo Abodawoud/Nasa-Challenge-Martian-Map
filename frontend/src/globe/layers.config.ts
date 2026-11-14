@@ -9,7 +9,7 @@
 // Stacking several mosaics at the same zoom made visible patches, because every mosaic has
 // its own brightness. The raw aligned CTX mosaic alone is seamless.
 
-export type LayerCategory = 'optical' | 'topographic' | 'thermal' | 'spectral' | 'vector'
+export type LayerCategory = 'optical' | 'topographic' | 'thermal' | 'spectral' | 'vector' | 'geology'
 
 interface BaseImageryLayer {
   id: string
@@ -167,18 +167,55 @@ export const IMAGERY_LAYERS: ImageryLayerConfig[] = [
   },
 ]
 
+/** How one kind of feature of the geologic map is drawn. Widths and sizes are tile pixels. */
+export interface GeologyStyle {
+  fill?: string
+  stroke?: string
+  width?: number
+  dash?: number[]
+  /** Points: radius of the dot. */
+  radius?: number
+  /** A pale edge under the line, so dark lines stay readable on dark ground. */
+  halo?: boolean
+}
+
+/** One layer of the USGS geologic map service (see geologyLayer.ts). */
+export interface GeologySource {
+  /** Layer number in the feature service. */
+  serviceLayer: number
+  geometry: 'polygon' | 'line' | 'point'
+  /** The attribute that decides the style. Omit when every feature looks the same. */
+  field?: string
+  /** Style per value of `field`. A value with no style and no fallback is not drawn. */
+  styles: Record<string, GeologyStyle>
+  fallback?: GeologyStyle
+  /** For the panel: "1,308 areas". */
+  countWord: string
+}
+
+export interface LegendItem {
+  color: string
+  label: string
+  /** Draw the sample as a line, not a square. */
+  line?: boolean
+  dashed?: boolean
+}
+
 /**
  * One row of the Layers panel. A row can switch several imagery layers together (the two CTX
- * mosaics are one "photo layer" for the user), or the rover path.
+ * mosaics are one "photo layer" for the user), the rover path, or one layer of the geologic map.
  */
 interface PanelBase {
   id: string
+  /** id of a PANEL_GROUPS entry. */
+  group: string
   title: string
   category: LayerCategory
   /** One short line: what the layer shows. */
   note: string
-  /** How to read the colours, shown while the layer is on. */
+  /** How to read the layer, shown while it is on. */
   legend?: string
+  legendItems?: LegendItem[]
   source: string
   defaultOn: boolean
   defaultOpacity: number
@@ -193,12 +230,55 @@ export interface ImageryPanelLayer extends PanelBase {
 export interface RoverPathPanelLayer extends PanelBase {
   kind: 'rover-path'
 }
-export type PanelLayer = ImageryPanelLayer | RoverPathPanelLayer
+export interface GeologyPanelLayer extends PanelBase {
+  kind: 'geology'
+  geology: GeologySource
+}
+export type PanelLayer = ImageryPanelLayer | RoverPathPanelLayer | GeologyPanelLayer
 
+export const PANEL_GROUPS: Array<{ id: string; title: string; note?: string }> = [
+  { id: 'mission', title: 'Mission' },
+  {
+    id: 'geology',
+    title: 'Geologic map of Jezero',
+    note: 'What the ground is made of, mapped by USGS scientists (Sun and Stack, 2020, map SIM 3464).',
+  },
+  { id: 'measure', title: 'Measurements' },
+  { id: 'photos', title: 'Photos' },
+]
+
+const USGS_MAP = 'USGS SIM 3464, Sun and Stack (2020)'
+const BLACK = '#111111'
+const DASH = [7, 6]
+const DASH_DOT = [10, 5, 2, 5]
+
+/**
+ * The colours of the 14 rock units, exactly as the USGS web map draws them (read from the
+ * service's own drawing rules on 2026-11-15). The key is the service's `unit` number.
+ */
+const ROCK_UNITS: Array<[string, string, string]> = [
+  ['0', '#004deb', 'Jezero fan 2'],
+  ['1', '#0099ff', 'Jezero fan 1'],
+  ['2', '#eb4d80', 'Jezero floor'],
+  ['3', '#de4d00', 'Lower etched'],
+  ['4', '#0000eb', 'Nili Planum fan'],
+  ['5', '#b300eb', 'Nili Planum 2'],
+  ['6', '#ebcc99', 'Nili Planum 1'],
+  ['7', '#ffff00', 'Eolian bedforms (wind ripples)'],
+  ['8', '#ccde99', 'Smooth, undivided'],
+  ['9', '#ebb3ff', 'Rugged bright'],
+  ['10', '#ffb300', 'Upper etched'],
+  ['11', '#b3804d', 'Crater rim'],
+  ['12', '#669900', 'Crater ejecta'],
+  ['13', '#ebeb66', 'Crater interior'],
+]
+
+// Order matters: this is also the drawing order, first entry on top (see layerControl.ts).
 export const PANEL_LAYERS: PanelLayer[] = [
   {
     kind: 'rover-path',
     id: 'rover-path',
+    group: 'mission',
     title: 'Perseverance path',
     category: 'vector',
     note: 'Every drive of the rover since landing in 2021.',
@@ -208,8 +288,186 @@ export const PANEL_LAYERS: PanelLayer[] = [
     adjustable: true,
   },
   {
+    kind: 'geology',
+    id: 'geo-landing-ellipse',
+    group: 'mission',
+    title: 'Landing ellipse',
+    category: 'geology',
+    note: 'The area the rover was planned to land in.',
+    source: USGS_MAP,
+    geology: { serviceLayer: 2, geometry: 'polygon', styles: {}, fallback: { stroke: '#ffffff', width: 3 }, countWord: 'outline' },
+    defaultOn: false,
+    defaultOpacity: 1,
+    adjustable: false,
+  },
+  {
+    kind: 'geology',
+    id: 'geo-points',
+    group: 'geology',
+    title: 'Location features',
+    category: 'geology',
+    note: 'Small craters and blocks of broken old rock.',
+    legendItems: [
+      { color: BLACK, label: 'Crater, 200 to 500 m' },
+      { color: '#ff0000', label: 'Megabreccia (broken old rock)' },
+    ],
+    source: USGS_MAP,
+    geology: {
+      serviceLayer: 4,
+      geometry: 'point',
+      field: 'TYPE',
+      styles: {
+        'small crater': { fill: BLACK, stroke: '#ffffff', width: 1.5, radius: 4 },
+        megabreccia: { fill: '#ff0000', stroke: '#ffffff', width: 1.5, radius: 4 },
+      },
+      countWord: 'points',
+    },
+    defaultOn: false,
+    defaultOpacity: 1,
+    adjustable: false,
+  },
+  {
+    kind: 'geology',
+    id: 'geo-sections',
+    group: 'geology',
+    title: 'Cross sections',
+    category: 'geology',
+    note: 'The two lines along which the map shows a cut through the ground.',
+    source: USGS_MAP,
+    geology: { serviceLayer: 3, geometry: 'line', styles: {}, fallback: { stroke: BLACK, width: 2.5, halo: true }, countWord: 'lines' },
+    defaultOn: false,
+    defaultOpacity: 1,
+    adjustable: false,
+  },
+  {
+    kind: 'geology',
+    id: 'geo-linear',
+    group: 'geology',
+    title: 'Linear features',
+    category: 'geology',
+    note: 'Old river channels, crater rims, ridges and the fronts of the delta.',
+    legendItems: [
+      { color: '#005ce6', label: 'River channel', line: true, dashed: true },
+      { color: '#00c5ff', label: 'Delta lobe front', line: true, dashed: true },
+      { color: BLACK, label: 'Crater rim crest', line: true },
+      { color: BLACK, label: 'Lineament, buried crater', line: true, dashed: true },
+    ],
+    source: USGS_MAP,
+    geology: {
+      serviceLayer: 6,
+      geometry: 'line',
+      field: 'TYPE',
+      styles: {
+        'channel (fluvial)': { stroke: '#005ce6', width: 2.5, dash: DASH_DOT, halo: true },
+        'delta lobe front': { stroke: '#00c5ff', width: 2.5, dash: DASH, halo: true },
+        'crest of crater rim': { stroke: BLACK, width: 2, halo: true },
+        'crest of buried crater': { stroke: BLACK, width: 2, dash: DASH_DOT, halo: true },
+        lineament: { stroke: BLACK, width: 2.5, dash: DASH, halo: true },
+        'ridge crest (type 1), certain': { stroke: BLACK, width: 3.5, halo: true },
+      },
+      fallback: { stroke: BLACK, width: 2, halo: true },
+      countWord: 'lines',
+    },
+    defaultOn: false,
+    defaultOpacity: 1,
+    adjustable: false,
+  },
+  {
+    kind: 'geology',
+    id: 'geo-contacts',
+    group: 'geology',
+    title: 'Geologic contacts',
+    category: 'geology',
+    note: 'The lines where one rock unit meets another.',
+    legendItems: [
+      { color: BLACK, label: 'Certain', line: true },
+      { color: BLACK, label: 'Approximate, inferred or hidden', line: true, dashed: true },
+    ],
+    source: USGS_MAP,
+    geology: {
+      serviceLayer: 5,
+      geometry: 'line',
+      field: 'TYPE',
+      styles: {
+        boundary: { stroke: BLACK, width: 2.4 },
+        certain: { stroke: BLACK, width: 1.5 },
+        approximate: { stroke: BLACK, width: 1.5, dash: DASH },
+        concealed: { stroke: BLACK, width: 1.5, dash: DASH },
+        inferred: { stroke: BLACK, width: 1.5, dash: DASH },
+        'generic contact 1': { stroke: '#8f5853', width: 2 },
+        'generic contact 2': { stroke: '#5ced5f', width: 2 },
+        // "gradational" has no line on the USGS map either: it is left out.
+      },
+      countWord: 'lines',
+    },
+    defaultOn: false,
+    defaultOpacity: 1,
+    adjustable: false,
+  },
+  {
+    kind: 'geology',
+    id: 'geo-surface',
+    group: 'geology',
+    title: 'Surface features',
+    category: 'geology',
+    note: 'Ridged ground and dark material lying on top of the rock.',
+    legendItems: [
+      { color: 'rgba(0,0,0,0.35)', label: 'Ridged ground' },
+      { color: 'rgba(20,20,20,0.6)', label: 'Dark mantling material' },
+    ],
+    source: USGS_MAP,
+    geology: {
+      serviceLayer: 7,
+      geometry: 'polygon',
+      field: 'TYPE',
+      styles: {
+        ridged: { fill: 'rgba(0,0,0,0.28)', stroke: BLACK, width: 1, dash: [3, 4] },
+        'dark-colored mantling material': { fill: 'rgba(20,20,20,0.5)' },
+      },
+      fallback: { fill: 'rgba(0,0,0,0.28)' },
+      countWord: 'areas',
+    },
+    defaultOn: false,
+    defaultOpacity: 0.8,
+    adjustable: true,
+  },
+  {
+    kind: 'geology',
+    id: 'geo-units',
+    group: 'geology',
+    title: 'Geologic units',
+    category: 'geology',
+    note: 'The 14 kinds of rock and ground, each in its own colour.',
+    legendItems: ROCK_UNITS.map(([, color, label]) => ({ color, label })),
+    source: USGS_MAP,
+    geology: {
+      serviceLayer: 8,
+      geometry: 'polygon',
+      field: 'unit',
+      styles: Object.fromEntries(ROCK_UNITS.map(([unit, color]) => [unit, { fill: color }])),
+      countWord: 'areas',
+    },
+    defaultOn: false,
+    defaultOpacity: 0.55,
+    adjustable: true,
+  },
+  {
+    kind: 'geology',
+    id: 'geo-boundary',
+    group: 'geology',
+    title: 'Map boundary',
+    category: 'geology',
+    note: 'The edge of the area the geologic map covers.',
+    source: USGS_MAP,
+    geology: { serviceLayer: 0, geometry: 'polygon', styles: {}, fallback: { stroke: BLACK, width: 3, halo: true }, countWord: 'outline' },
+    defaultOn: false,
+    defaultOpacity: 1,
+    adjustable: false,
+  },
+  {
     kind: 'imagery',
     id: 'themis-night',
+    group: 'measure',
     title: 'Night heat',
     category: 'thermal',
     note: 'How warm the ground stays at night, 100 m per pixel.',
@@ -223,6 +481,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
   {
     kind: 'imagery',
     id: 'hirise',
+    group: 'photos',
     title: 'Ultra-detail photos',
     category: 'optical',
     note: 'HiRISE, 25 cm per pixel. Seen only very close to the ground, near the landing site.',
@@ -235,6 +494,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
   {
     kind: 'imagery',
     id: 'ctx',
+    group: 'photos',
     title: 'Detail photos',
     category: 'optical',
     note: 'CTX, about 5 m per pixel. Without it, only the colour map of the whole planet is left.',

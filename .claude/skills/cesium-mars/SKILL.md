@@ -108,6 +108,15 @@ Waypoints with distance totals: `.../M20_waypoints.json`). It is drawn as a pain
 (`src/globe/pathLayer.ts`): Cesium drapes it on the ground in 2D and 3D, so no heights are needed. Use the same
 way for any other line or area layer. The Layers panel rows are `PANEL_LAYERS` in `layers.config.ts`, the
 switching code is `layerControl.ts` (hidden = `show = false`, the rover path is built on first use).
+**USGS geologic map of Jezero (used, checked 2026-11-15):** feature service
+`https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Jezero_FeatureServiceFromPro/FeatureServer`
+(layers 0 boundary, 1 figures, 2 landing ellipse, 3 cross sections, 4 location features, 5 contacts, 6 linear features,
+7 surface features, 8 geologic units; CORS `*`; at most 2000 features per answer, so page with `resultOffset`).
+Its coordinates are metres in Transverse Mercator on the Mars sphere, centre 77.5 E: `geologyLayer.ts` converts
+them (checked against the service's own GeoJSON output) and paints them as tiles. Unit colours are the service's
+own drawing rules. To test painted layers without a screenshot: read pixels with `gl.readPixels` inside
+`scene.postRender` (reading the canvas at any other moment gives black).
+
 **2D never turns:** in 2D `enableRotate` must stay off (it switches Cesium's twist gesture), `enableTranslate` on.
 
 Older, stops at sol 1176 (ArcGIS feature service, not used): `https://trek.nasa.gov/mars/trekarcgis/rest/services/Perseverance_Traverse_Path/MapServer/0`
