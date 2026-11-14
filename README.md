@@ -54,6 +54,7 @@ The landing page and the map are loaded separately: the landing page does not do
 | See Mars as a globe with NASA colour images | Opens like this |
 | **Fly to Jezero** | Button at the top right. The camera first shows the whole crater from above. It waits there until the ground below is loaded (at most 4 seconds), then glides down to 1.5 km above the ground. The ground at the end of the flight is downloaded in advance, so it arrives sharp |
 | **2D / 3D** | Buttons at the top right. 2D is a flat map, 3D is the real planet. Switching keeps the same place and about the same zoom. From 2D, 3D looks north at that place with a 45° tilt |
+| **Layers** | Button at the top left of the map. Switch layers on and off, and set how strong an overlay is. **Perseverance path**: every drive of the rover since landing, loaded live from NASA's Mars 2020 mission map (the panel shows the number of drives, the distance and the last Mars day). **Night heat**: THEMIS infrared, bright = warm rock, dark = cold dust. **Ultra-detail photos** (HiRISE) and **Detail photos** (CTX) can be switched off too |
 | Go down to the surface | Zoom in to 25 m above the ground. Near the ground the sky turns Mars-coloured |
 | Coordinates under the mouse | Bottom left (latitude and longitude, on the 3D ground) |
 | Map controls | Bottom right: zoom in and out (smooth, grey out at the limits), compass (click to face north), whole planet, fullscreen |
@@ -64,7 +65,7 @@ The landing page and the map are loaded separately: the landing page does not do
 | | 3D near the ground (below 300 km) | 3D far away (globe) | 2D |
 |---|---|---|---|
 | **Drag** | Move over the ground. The point you grab stays under the cursor, with a short glide when you let go | Spin the planet | Move the map |
-| **Ctrl + drag** or **middle drag** | Right / left turns the view around the screen centre. Up tilts towards the horizon, down tilts towards a top view | Tilt | Turn |
+| **Ctrl + drag** or **middle drag** | Right / left turns the view around the screen centre. Up tilts towards the horizon, down tilts towards a top view | Tilt | Nothing: the flat map always keeps north up |
 | **Drag on the sky** | Look around in place | | |
 | **Wheel** | Zoom | Zoom | Zoom |
 

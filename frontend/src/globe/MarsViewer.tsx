@@ -6,6 +6,7 @@ import { createTrekTerrain } from './trekTerrain'
 import { installGroundControls } from './groundControls'
 import { IMAGERY_LAYERS } from './layers.config'
 import { addImageryLayers } from './imagery'
+import { registerImageryLayers } from './layerControl'
 import { preloadView, waitForTiles, whenIdle } from './preload'
 import type { CameraView } from './preload'
 
@@ -368,9 +369,16 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     // In 3D near the ground, groundControls.ts takes over drag and tilt and switches Cesium's
     // own off. It only does that in 3D, so after a switch to 2D they must be turned back on,
     // or the flat map could not be dragged.
+    //
+    // The flat map never turns: north stays up. In 2D, Cesium turns the map with Ctrl + drag
+    // or a middle drag, and that gesture is switched by `enableRotate` (ScreenSpaceCamera-
+    // Controller update2D: twist2D). Dragging the map is `enableTranslate`. So in 2D:
+    // translate on, rotate off. Before this fix all three were switched on after a change
+    // to 2D, and the map could be turned.
     const restoreCesiumControls = () => {
-      ssc.enableTilt = true
-      ssc.enableRotate = true
+      const flat = scene.mode === Cesium.SceneMode.SCENE2D
+      ssc.enableTilt = !flat
+      ssc.enableRotate = !flat
       ssc.enableTranslate = true
     }
     scene.morphComplete.addEventListener(restoreCesiumControls)
@@ -384,7 +392,7 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
       }, 0)
     })
 
-    addImageryLayers(viewer, IMAGERY_LAYERS)
+    registerImageryLayers(viewer, addImageryLayers(viewer, IMAGERY_LAYERS))
 
     // Trek's own terrain. If it fails, fall back to a smooth sphere (PLAN.md risk list).
     createTrekTerrain()

@@ -102,7 +102,15 @@ new Cesium.WebMapTileServiceImageryProvider({
 Find more: `https://trek.nasa.gov/mars/TrekServices/ws/index/eq/searchItems?key=<word>&proj=urn:ogc:def:crs:EPSG::104905`,
 then `.../ws/index/getLayerServices?uuid=<item_UUID>` gives `endPoint` and `layerId`.
 
-Perseverance path (ArcGIS feature service): `https://trek.nasa.gov/mars/trekarcgis/rest/services/Perseverance_Traverse_Path/MapServer/0`
+**Perseverance path (used, checked 2026-11-15):** `https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_traverse.json`
+(GeoJSON, one LineString per drive, lon/lat degrees + height, CORS `*`, 1.7 MB, current: sol 2022 on the check day.
+Waypoints with distance totals: `.../M20_waypoints.json`). It is drawn as a painted imagery layer
+(`src/globe/pathLayer.ts`): Cesium drapes it on the ground in 2D and 3D, so no heights are needed. Use the same
+way for any other line or area layer. The Layers panel rows are `PANEL_LAYERS` in `layers.config.ts`, the
+switching code is `layerControl.ts` (hidden = `show = false`, the rover path is built on first use).
+**2D never turns:** in 2D `enableRotate` must stay off (it switches Cesium's twist gesture), `enableTranslate` on.
+
+Older, stops at sol 1176 (ArcGIS feature service, not used): `https://trek.nasa.gov/mars/trekarcgis/rest/services/Perseverance_Traverse_Path/MapServer/0`
 (query with `/query?where=1%3D1&outFields=*&f=geojson`, ⚠️ check CORS, else save a GeoJSON copy to `public/data`).
 
 ### Imagery rules learned the hard way (2026-11-14)

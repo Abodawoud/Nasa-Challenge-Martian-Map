@@ -6,6 +6,7 @@ import { Box as Box3D, Map as MapIcon, MapPin, Mouse, Rocket } from 'lucide-reac
 import { MarsViewer, flyToJezero, setViewMode } from './globe/MarsViewer'
 import type { CursorInfo, ViewMode } from './globe/MarsViewer'
 import { MapControls } from './ui/MapControls'
+import { LayersPanel } from './ui/LayersPanel'
 import { CompassStar } from './ui/CompassStar'
 import { visibleTilesLoaded } from './globe/preload'
 
@@ -152,6 +153,7 @@ export default function App() {
       {/* The map. "mars-space" + data-sky (set by MarsViewer) draw the space or Mars sky behind it. */}
       <Box className="mars-space" position="relative" flex="1" minH="0" overflow="hidden">
         <MarsViewer onReady={onReady} onCursor={setCursor} onTerrainStatus={setTerrain} />
+        <LayersPanel viewer={viewer} />
         <MapControls viewer={viewer} />
       </Box>
 
@@ -178,7 +180,13 @@ export default function App() {
         <HStack gap="1.5" color="whiteAlpha.700" hideBelow="lg">
           <Mouse size={13} aria-hidden />
           <Text>
-            <Key>Drag</Key> move · <Key>Ctrl</Key> + <Key>Drag</Key> {mode === '2D' ? 'turn' : 'turn and tilt'} · <Key>Wheel</Key> zoom
+            <Key>Drag</Key> move ·{' '}
+            {mode === '3D' && (
+              <>
+                <Key>Ctrl</Key> + <Key>Drag</Key> turn and tilt ·{' '}
+              </>
+            )}
+            <Key>Wheel</Key> zoom
           </Text>
         </HStack>
         <StatusItem label="Map" state={tilesLoading ? 'wait' : 'ok'} text={tilesLoading ? 'Loading' : 'Ready'} />

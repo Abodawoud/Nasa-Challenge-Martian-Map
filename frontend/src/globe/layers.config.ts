@@ -149,4 +149,99 @@ export const IMAGERY_LAYERS: ImageryLayerConfig[] = [
     tintToMars: true,
     greyLevels: [38, 150],
   },
+  {
+    // Night-time heat (THEMIS infrared camera on Mars Odyssey), global between 65 S and 65 N.
+    // Checked 2026-11-15: png, levels 0 to 9 answer over Jezero. Kept in its own grey: it is
+    // a measurement picture, so it is not recoloured.
+    kind: 'trek-wmts',
+    id: 'themis-night',
+    title: 'Night heat (THEMIS, 100 m)',
+    category: 'thermal',
+    layerId: 'THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018',
+    ext: 'png',
+    maximumLevel: 9,
+    bounds: [-180, -65, 180, 65],
+    defaultOpacity: 0.6,
+    visible: false,
+    source: 'NASA/JPL-Caltech/Arizona State University, Mars Trek',
+  },
+]
+
+/**
+ * One row of the Layers panel. A row can switch several imagery layers together (the two CTX
+ * mosaics are one "photo layer" for the user), or the rover path.
+ */
+interface PanelBase {
+  id: string
+  title: string
+  category: LayerCategory
+  /** One short line: what the layer shows. */
+  note: string
+  /** How to read the colours, shown while the layer is on. */
+  legend?: string
+  source: string
+  defaultOn: boolean
+  defaultOpacity: number
+  /** Show a transparency slider. */
+  adjustable: boolean
+}
+export interface ImageryPanelLayer extends PanelBase {
+  kind: 'imagery'
+  /** ids from IMAGERY_LAYERS above. */
+  imageryIds: string[]
+}
+export interface RoverPathPanelLayer extends PanelBase {
+  kind: 'rover-path'
+}
+export type PanelLayer = ImageryPanelLayer | RoverPathPanelLayer
+
+export const PANEL_LAYERS: PanelLayer[] = [
+  {
+    kind: 'rover-path',
+    id: 'rover-path',
+    title: 'Perseverance path',
+    category: 'vector',
+    note: 'Every drive of the rover since landing in 2021.',
+    source: 'NASA/JPL-Caltech, Mars 2020 mission map',
+    defaultOn: false,
+    defaultOpacity: 1,
+    adjustable: true,
+  },
+  {
+    kind: 'imagery',
+    id: 'themis-night',
+    title: 'Night heat',
+    category: 'thermal',
+    note: 'How warm the ground stays at night, 100 m per pixel.',
+    legend: 'Bright = warm at night (rock). Dark = cold (dust and sand).',
+    source: 'THEMIS, NASA/JPL-Caltech/ASU',
+    imageryIds: ['themis-night'],
+    defaultOn: false,
+    defaultOpacity: 0.6,
+    adjustable: true,
+  },
+  {
+    kind: 'imagery',
+    id: 'hirise',
+    title: 'Ultra-detail photos',
+    category: 'optical',
+    note: 'HiRISE, 25 cm per pixel. Seen only very close to the ground, near the landing site.',
+    source: 'NASA/JPL-Caltech/University of Arizona',
+    imageryIds: ['hirise-jezero'],
+    defaultOn: true,
+    defaultOpacity: 1,
+    adjustable: false,
+  },
+  {
+    kind: 'imagery',
+    id: 'ctx',
+    title: 'Detail photos',
+    category: 'optical',
+    note: 'CTX, about 5 m per pixel. Without it, only the colour map of the whole planet is left.',
+    source: 'NASA/JPL-Caltech/MSSS, Caltech Murray Lab, Esri',
+    imageryIds: ['ctx-global', 'ctx-jezero-region'],
+    defaultOn: true,
+    defaultOpacity: 1,
+    adjustable: false,
+  },
 ]
