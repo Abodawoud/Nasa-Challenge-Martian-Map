@@ -297,7 +297,10 @@ export function setViewMode(viewer: Cesium.Viewer, mode: ViewMode) {
   else scene.morphTo3D(duration)
 }
 
-/** Fly the camera down to Jezero, tilted so the crater walls are visible. */
+/** How long the camera rests above Jezero before descending. */
+const OVERVIEW_PAUSE_MS = 800
+
+/** Fly the camera down to Jezero: overview from above first, then descend to near the ground. */
 export function flyToJezero(viewer: Cesium.Viewer, duration = 4) {
   const { lon, lat } = PERSEVERANCE_LANDING
   if (viewer.scene.mode === Cesium.SceneMode.SCENE2D) {
@@ -312,11 +315,35 @@ export function flyToJezero(viewer: Cesium.Viewer, duration = 4) {
     })
     return
   }
-  // Trek terrain at Jezero sits about +5.6 km on its own height scale, so the camera
-  // height is measured from there.
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(lon - 0.05, lat - 0.45, 30_000, MARS_ELLIPSOID),
-    orientation: { heading: Cesium.Math.toRadians(5), pitch: Cesium.Math.toRadians(-32), roll: 0 },
-    duration,
+  // 3D, two stages, like arriving from orbit:
+  //   1. Overview: straight above Jezero, looking down, the whole crater in view.
+  //   2. Descent: glide down and tilt towards the horizon until it feels like standing
+  //      near the ground, looking north over the landing site and the delta.
+  // Trek terrain at Jezero sits about +5.6 km on its own height scale (README section 12),
+  // so the final height is measured from the real ground under the camera.
+  const camera = viewer.camera
+  const ground = viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(lon, lat)) ?? 5_640
+  const overview = {
+    destination: Cesium.Cartesian3.fromDegrees(lon, lat, ground + 120_000, MARS_ELLIPSOID),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+  }
+  const descent = {
+    destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.11, ground + 4_500, MARS_ELLIPSOID),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-22), roll: 0 },
+  }
+  camera.flyTo({
+    ...overview,
+    duration: duration * 0.55,
+    easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
+    // A short pause above the crater, so the area is understood before the descent.
+    complete: () =>
+      setTimeout(() => {
+        if (viewer.isDestroyed()) return
+        camera.flyTo({
+          ...descent,
+          duration: duration * 0.8,
+          easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+        })
+      }, OVERVIEW_PAUSE_MS),
   })
 }
