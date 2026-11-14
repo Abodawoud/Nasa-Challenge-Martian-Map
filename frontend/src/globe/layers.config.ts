@@ -98,7 +98,9 @@ export const IMAGERY_LAYERS: ImageryLayerConfig[] = [
     maximumLevel: 17,
     bounds: [77.2229331, 18.3067994, 77.583964, 18.669315],
     defaultOpacity: 1,
-    visible: true,
+    // Hidden by default: HiRISE is many narrow strips taken in different light, so close up
+    // they look like stripes of different brightness. Optional "Ultra-detail" layer later.
+    visible: false,
     source: 'NASA/JPL-Caltech/University of Arizona/USGS, Mars Trek',
     tintToMars: true,
     greyLevels: [38, 150],

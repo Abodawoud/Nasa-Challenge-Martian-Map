@@ -35,8 +35,9 @@ export function tintToMars(
   const [low, high] = levels
   const middle = (low + high) / 2 / 255
   const brightness = 0.5 / middle
-  // Stretch to about 65% of the full range, not 100%. A full stretch turns bright sand white.
-  const contrast = 0.65 / Math.max(0.01, ((high - low) / 255) * brightness)
+  // Stretch to about half of the full range. A stronger stretch turns bright sand white and
+  // makes the brightness differences between neighbouring photo strips stand out.
+  const contrast = 0.5 / Math.max(0.01, ((high - low) / 255) * brightness)
   ctx.filter = `grayscale(1) brightness(${brightness.toFixed(3)}) contrast(${contrast.toFixed(3)})`
   ctx.drawImage(image, 0, 0)
   ctx.filter = 'none'
