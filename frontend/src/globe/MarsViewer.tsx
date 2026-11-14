@@ -14,6 +14,10 @@ const MIN_CAMERA_ABOVE_GROUND_M = 300
 const MAX_CAMERA_DISTANCE_M = 25_000_000
 /** Steepest upward tilt allowed: 5° below the horizon. */
 const MAX_PITCH_RAD = Cesium.Math.toRadians(-5)
+/** 2.5D: steepest upward tilt (keeps the far map edge out of view). */
+const MAX_PITCH_CV_RAD = Cesium.Math.toRadians(-40)
+/** 2.5D: highest camera, so the flat map always fills the screen. */
+const MAX_HEIGHT_CV_M = 400_000
 
 export interface CursorInfo {
   lon: number
@@ -108,7 +112,10 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
         const f = camera.frustum as Cesium.OrthographicOffCenterFrustum
         if (f.right === undefined || f.left === undefined || f.top === undefined || f.bottom === undefined) return
         const width = f.right - f.left
-        const maxWidth = 2 * halfWorldX
+        // The whole view must stay inside the map: limited by the map's width AND its height
+        // (a tall screen would otherwise show space above and below).
+        const aspect = scene.canvas.clientWidth / Math.max(1, scene.canvas.clientHeight)
+        const maxWidth = Math.min(2 * halfWorldX, 2 * halfWorldY * aspect)
         const target = width > maxWidth ? maxWidth : width < 1_000 ? 1_000 : width
         if (target !== width) {
           const k = target / width
@@ -118,6 +125,22 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
           f.bottom *= k
         }
         return
+      }
+
+      // 2.5D: the flat map must fill the screen. Limit the height, keep the camera tilted
+      // down enough that the far edge stays out of view, and keep the camera away from the
+      // map edges. With a 60° view, a -40° tilt sees the ground up to about 6 heights ahead.
+      if (scene.mode === Cesium.SceneMode.COLUMBUS_VIEW) {
+        if (Number.isFinite(camera.pitch) && camera.pitch > MAX_PITCH_CV_RAD) {
+          camera.setView({ orientation: { heading: camera.heading, pitch: MAX_PITCH_CV_RAD, roll: 0 } })
+        }
+        const p = camera.position
+        if (p.z > MAX_HEIGHT_CV_M) p.z = MAX_HEIGHT_CV_M
+        const margin = p.z * 6.5
+        const limit = (value: number, world: number) =>
+          margin >= world ? 0 : Math.min(world - margin, Math.max(-world + margin, value))
+        p.x = limit(p.x, halfWorldX)
+        p.y = limit(p.y, halfWorldY)
       }
 
       // 3D and 2.5D: never look up past the horizon.
