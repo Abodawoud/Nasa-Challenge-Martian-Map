@@ -240,7 +240,7 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
         camera.setView({ orientation: { heading, pitch: MAX_PITCH_RAD, roll: 0 } })
       }
 
-      // 3D: stay above the ground (Trek terrain heights, see README section 12).
+      // 3D: stay above the ground (Trek terrain heights, see PLAN.md section 12).
       const carto = camera.positionCartographic
       if (!carto || !Number.isFinite(carto.height)) return
       const ground = scene.globe.getHeight(carto)
@@ -289,7 +289,7 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
 
     addImageryLayers(viewer, IMAGERY_LAYERS)
 
-    // Trek's own terrain. If it fails, fall back to a smooth sphere (README risk list).
+    // Trek's own terrain. If it fails, fall back to a smooth sphere (PLAN.md risk list).
     createTrekTerrain()
       .then(async (terrain) => {
         if (destroyed) return
@@ -436,7 +436,7 @@ export function flyToJezero(viewer: Cesium.Viewer, duration = 4) {
   //   1. Overview: straight above Jezero, looking down, the whole crater in view.
   //   2. Descent: glide down and tilt towards the horizon until it feels like standing
   //      near the ground, looking north over the landing site and the delta.
-  // Trek terrain at Jezero sits about +5.6 km on its own height scale (README section 12),
+  // Trek terrain at Jezero sits about +5.6 km on its own height scale (PLAN.md section 12),
   // so the final height is measured from the real ground under the camera.
   const camera = viewer.camera
   const ground = viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(lon, lat)) ?? 5_640

@@ -1,7 +1,7 @@
 // CTX and HiRISE are black-and-white cameras. Next to the colour Viking map they look like
 // a grey patch. This gives them the Mars colour while keeping all their detail, so the
 // sharp photos match the planet's colours.
-// This is a visual tint only. The README says so, and it never changes any number.
+// This is a visual tint only. PLAN.md says so, and it never changes any number.
 
 /**
  * Grey range [low, high] of a source that is stretched to the full 0 to 255 range before

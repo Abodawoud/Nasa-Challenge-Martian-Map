@@ -1,5 +1,5 @@
 // Mars setup for Cesium. Rules and reasons: .claude/skills/cesium-mars/SKILL.md
-// and README decisions D3, D7.
+// and PLAN.md decisions D3, D7.
 import * as Cesium from 'cesium'
 
 /** Mars radius used by NASA Trek and the USGS Mars 2020 products (Mars 2000 sphere, IAU). */
@@ -32,5 +32,5 @@ export const PERSEVERANCE_LANDING = {
   lat: 18.4446,
 }
 
-/** Trek's own quantized-mesh terrain for Mars. Undocumented endpoint, see README risk list. */
+/** Trek's own quantized-mesh terrain for Mars. Undocumented endpoint, see PLAN.md risk list. */
 export const TREK_TERRAIN_URL = 'https://marshub.s3.amazonaws.com/mars_v14'

@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* Clean NASA website style (README section 9). */
+/* Clean NASA website style (PLAN.md section 9). */
 @theme {
   --color-nasa-blue: #0b3d91;
   --color-nasa-blue-dark: #082c6b;

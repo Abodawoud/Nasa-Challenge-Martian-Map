@@ -6,7 +6,7 @@ description: Verified facts and rules for building this project's Mars map with 
 # Cesium on Mars (this project)
 
 Everything here was checked live on 2026-11-14 unless marked ⚠️. The plan and the reasons are in
-`README.md` (sections 4 to 8). Do not change a rule here without updating the README decision.
+`PLAN.md` (sections 4 to 8). Do not change a rule here without updating the PLAN.md decision.
 
 ## 1. Rules that must never break
 
@@ -149,7 +149,7 @@ re-enable Cesium's rotate / tilt / translate in 3D near the ground.
 - The frontend gets numbers from the backend API: `/api/dem/info`, `/api/point?lon=&lat=`,
   `/api/route` (A and B with points `[lon, lat, h]` + stats), `/api/profile`.
 - Metres per degree on Mars: `2πR/360 = 59,274.7 m`. East-west metres per degree × `cos(lat)`.
-- Slope: Horn method in real metres. Routes: scikit-image `MCP_Geometric` (see README section 8).
+- Slope: Horn method in real metres. Routes: scikit-image `MCP_Geometric` (see PLAN.md section 8).
 - Draw route points exactly as the API returns them (`[lon, lat, h]`), with explicit heights.
 
 ## 7. Layer config

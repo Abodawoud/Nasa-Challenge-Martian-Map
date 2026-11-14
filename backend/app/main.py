@@ -1,7 +1,7 @@
 """Martian Map backend.
 
 M0: only a health check. The DEM, routes and point info arrive in M3 and M4
-(see README sections 6 and 8).
+(see PLAN.md sections 6 and 8).
 """
 
 from fastapi import FastAPI

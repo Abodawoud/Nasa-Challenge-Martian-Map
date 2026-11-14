@@ -1,7 +1,7 @@
 // Mouse controls for 3D close to the ground (below GROUND_CONTROLS_BELOW_M above the terrain).
 //
 // Why: Cesium's built-in 3D drag "grabs" the smooth Mars sphere. Trek's terrain sits about
-// 5.6 km above that sphere (different height zero, README section 12), so near the ground the
+// 5.6 km above that sphere (different height zero, PLAN.md section 12), so near the ground the
 // grabbed point was wrong and dragging moved the camera in odd directions (tested 2026-11-14:
 // dragging up moved the camera south). These controls work on the real ground instead:
 //
