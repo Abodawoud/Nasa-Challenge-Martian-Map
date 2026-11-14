@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as Cesium from 'cesium'
+import { IconButton, Separator, VStack } from '@chakra-ui/react'
+import { Globe, Maximize, Minimize, Minus, Navigation2, Plus } from 'lucide-react'
 import { getZoomState } from '../globe/MarsViewer'
 
 /** The usual map buttons: zoom, compass (reset north), whole planet, fullscreen. */
@@ -96,41 +98,49 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
   }
 
   return (
-    <div className="absolute bottom-14 right-4 z-10 flex flex-col gap-2">
-      <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-md">
+    <VStack position="absolute" bottom="14" right="4" zIndex="10" gap="2">
+      <ControlGroup>
         <ControlButton label="Zoom in" onClick={() => zoom(1)} disabled={!canZoomIn}>
-          <path d="M12 5v14M5 12h14" />
+          <Plus size={18} aria-hidden />
         </ControlButton>
-        <div className="h-px bg-slate-200" />
+        <Separator />
         <ControlButton label="Zoom out" onClick={() => zoom(-1)} disabled={!canZoomOut}>
-          <path d="M5 12h14" />
+          <Minus size={18} aria-hidden />
         </ControlButton>
-      </div>
+      </ControlGroup>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-md">
+      <ControlGroup>
         <ControlButton label="Reset north" onClick={resetNorth}>
-          <g style={{ transform: `rotate(${-heading}deg)`, transformOrigin: '12px 12px', transition: 'transform 120ms' }}>
-            <path d="M12 3l3.5 9h-7z" fill="#FC3D21" stroke="none" />
-            <path d="M12 21l-3.5-9h7z" fill="#94a3b8" stroke="none" />
-          </g>
+          {/* The arrow keeps pointing to north while the view turns. */}
+          <Navigation2
+            size={18}
+            aria-hidden
+            color="#fc3d21"
+            fill="#fc3d21"
+            style={{ transform: `rotate(${-heading}deg)`, transition: 'transform 120ms' }}
+          />
         </ControlButton>
-      </div>
+      </ControlGroup>
 
-      <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-md">
+      <ControlGroup>
         <ControlButton label="Whole planet" onClick={wholePlanet}>
-          <circle cx="12" cy="12" r="8.5" />
-          <path d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17" />
+          <Globe size={18} aria-hidden />
         </ControlButton>
-        <div className="h-px bg-slate-200" />
+        <Separator />
         <ControlButton label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleFullscreen}>
-          {fullscreen ? (
-            <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
-          ) : (
-            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
-          )}
+          {fullscreen ? <Minimize size={18} aria-hidden /> : <Maximize size={18} aria-hidden />}
         </ControlButton>
-      </div>
-    </div>
+      </ControlGroup>
+    </VStack>
+  )
+}
+
+/** A white rounded card that holds one or two control buttons. */
+function ControlGroup({ children }: { children: ReactNode }) {
+  return (
+    <VStack gap="0" bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" shadow="md" overflow="hidden">
+      {children}
+    </VStack>
   )
 }
 
@@ -146,17 +156,18 @@ function ControlButton({
   children: ReactNode
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
+    <IconButton
       aria-label={label}
       title={disabled ? `${label} (limit reached)` : label}
-      className="flex h-10 w-10 items-center justify-center text-slate-700 transition-colors hover:bg-slate-100 hover:text-nasa-blue focus-visible:outline-2 focus-visible:outline-nasa-blue active:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent disabled:hover:text-slate-300"
+      onClick={onClick}
+      disabled={disabled}
+      variant="ghost"
+      colorPalette="brand"
+      color="gray.700"
+      size="md"
+      borderRadius="0"
     >
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        {children}
-      </svg>
-    </button>
+      {children}
+    </IconButton>
   )
 }

@@ -428,7 +428,7 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return <div ref={containerRef} className="absolute inset-0" />
+  return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
 }
 
 /** A place and how much ground is seen around it, kept across a 2D / 3D switch. */

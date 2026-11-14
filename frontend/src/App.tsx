@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as Cesium from 'cesium'
+import { Box, Button, Circle, Flex, Group, Heading, HStack, Kbd, Status, Text } from '@chakra-ui/react'
+import { Box as Box3D, Map as MapIcon, MapPin, Mouse, Rocket, Satellite } from 'lucide-react'
 import { MarsViewer, flyToJezero, setViewMode } from './globe/MarsViewer'
 import type { CursorInfo, ViewMode } from './globe/MarsViewer'
 import { MapControls } from './ui/MapControls'
@@ -7,7 +9,10 @@ import { visibleTilesLoaded } from './globe/preload'
 
 type ApiStatus = 'checking' | 'ok' | 'down'
 
-const MODES: ViewMode[] = ['2D', '3D']
+const MODES: Array<{ mode: ViewMode; Icon: typeof MapIcon; hint: string }> = [
+  { mode: '2D', Icon: MapIcon, hint: 'Flat map' },
+  { mode: '3D', Icon: Box3D, hint: 'The planet with real terrain' },
+]
 
 /** Short loads (moving the map a little) do not flash the status: show "Loading" after this. */
 const LOADING_DELAY_MS = 300
@@ -59,79 +64,131 @@ export default function App() {
   }
 
   return (
-    <div className="mars-space relative h-full w-full overflow-hidden">
+    // "mars-space" + data-sky (set by MarsViewer) draw the space or Mars sky behind the map.
+    <Box className="mars-space" position="relative" h="full" w="full" overflow="hidden">
       <MarsViewer onReady={onReady} onCursor={setCursor} onTerrainStatus={setTerrain} />
 
       <MapControls viewer={viewer} />
 
       {/* Top bar */}
-      <header className="absolute inset-x-0 top-0 z-10 flex items-center gap-4 border-b border-slate-200 bg-white/95 px-5 py-3 shadow-sm backdrop-blur">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-nasa-blue text-sm font-bold text-white">M</div>
-          <div className="leading-tight">
-            <h1 className="text-[15px] font-semibold text-slate-900">Martian Map</h1>
-            <p className="text-xs text-slate-500">Jezero Crater Marswalk Planner</p>
-          </div>
-        </div>
+      <Flex
+        as="header"
+        position="absolute"
+        insetX="0"
+        top="0"
+        zIndex="10"
+        align="center"
+        gap="4"
+        px="5"
+        py="2.5"
+        bg="whiteAlpha.900"
+        backdropFilter="blur(8px)"
+        borderBottomWidth="1px"
+        borderColor="gray.200"
+        shadow="sm"
+      >
+        <HStack gap="3">
+          <Circle size="9" bg="brand.600" color="white">
+            <Satellite size={18} aria-hidden />
+          </Circle>
+          <Box lineHeight="short">
+            <Heading as="h1" size="sm" color="gray.900">
+              Martian Map
+            </Heading>
+            <Text fontSize="xs" color="gray.500">
+              Jezero Crater Marswalk Planner
+            </Text>
+          </Box>
+        </HStack>
 
-        <nav aria-label="View mode" className="ml-auto flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-          {MODES.map((m) => (
-            <button
+        <Group attached ml="auto" role="group" aria-label="View mode">
+          {MODES.map(({ mode: m, Icon: ModeIcon, hint }) => (
+            <Button
               key={m}
-              type="button"
-              onClick={() => changeMode(m)}
+              size="sm"
+              colorPalette="brand"
+              variant={mode === m ? 'solid' : 'outline'}
+              bg={mode === m ? undefined : 'white'}
               aria-pressed={mode === m}
-              className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                mode === m ? 'bg-nasa-blue text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900'
-              }`}
+              title={hint}
+              onClick={() => changeMode(m)}
             >
+              <ModeIcon size={16} aria-hidden />
               {m}
-            </button>
+            </Button>
           ))}
-        </nav>
+        </Group>
 
-        <button
-          type="button"
-          onClick={() => viewerRef.current && flyToJezero(viewerRef.current)}
-          className="rounded-lg bg-nasa-blue px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-nasa-blue-dark"
-        >
+        <Button size="sm" colorPalette="brand" onClick={() => viewerRef.current && flyToJezero(viewerRef.current)}>
+          <Rocket size={16} aria-hidden />
           Fly to Jezero
-        </button>
-      </header>
+        </Button>
+      </Flex>
 
       {/* Bottom status bar */}
-      <footer className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-slate-200 bg-white/95 px-5 py-2 text-xs text-slate-600 backdrop-blur">
-        <span className="tabular-nums">
-          {cursor ? `Lat ${cursor.lat.toFixed(4)}° · Lon ${cursor.lon.toFixed(4)}° E` : 'Move the mouse over Mars'}
-        </span>
-        <span className="hidden text-slate-500 lg:inline">
-          <Key>Drag</Key> move · <Key>Ctrl</Key> + <Key>Drag</Key> {mode === '2D' ? 'turn' : 'turn and tilt'} · <Key>Wheel</Key> zoom
-        </span>
-        <StatusDot label="Map" state={tilesLoading ? 'wait' : 'ok'} text={tilesLoading ? 'Loading' : 'Ready'} />
-        <StatusDot label="3D ground" state={terrain === 'trek' ? 'ok' : terrain === 'flat' ? 'warn' : 'wait'}
-          text={terrain === 'trek' ? 'NASA Trek terrain' : terrain === 'flat' ? 'Smooth sphere (Trek terrain failed)' : 'Loading'} />
-        <StatusDot label="Backend" state={api === 'ok' ? 'ok' : api === 'down' ? 'warn' : 'wait'}
-          text={api === 'ok' ? 'Connected' : api === 'down' ? 'Not reachable' : 'Checking'} />
-        <span className="ml-auto text-slate-500">Images and terrain: NASA/JPL-Caltech Mars Trek · USGS</span>
-      </footer>
-    </div>
+      <Flex
+        as="footer"
+        position="absolute"
+        insetX="0"
+        bottom="0"
+        zIndex="10"
+        wrap="wrap"
+        align="center"
+        columnGap="6"
+        rowGap="1"
+        px="5"
+        py="1.5"
+        fontSize="xs"
+        color="gray.600"
+        bg="whiteAlpha.900"
+        backdropFilter="blur(8px)"
+        borderTopWidth="1px"
+        borderColor="gray.200"
+      >
+        <HStack gap="1.5" fontVariantNumeric="tabular-nums" minW="230px">
+          <MapPin size={13} aria-hidden />
+          <Text>{cursor ? `Lat ${cursor.lat.toFixed(4)}° · Lon ${cursor.lon.toFixed(4)}° E` : 'Move the mouse over Mars'}</Text>
+        </HStack>
+        <HStack gap="1.5" color="gray.500" hideBelow="lg">
+          <Mouse size={13} aria-hidden />
+          <Text>
+            <Kbd size="sm">Drag</Kbd> move · <Kbd size="sm">Ctrl</Kbd> + <Kbd size="sm">Drag</Kbd>{' '}
+            {mode === '2D' ? 'turn' : 'turn and tilt'} · <Kbd size="sm">Wheel</Kbd> zoom
+          </Text>
+        </HStack>
+        <StatusItem label="Map" state={tilesLoading ? 'wait' : 'ok'} text={tilesLoading ? 'Loading' : 'Ready'} />
+        <StatusItem
+          label="3D ground"
+          state={terrain === 'trek' ? 'ok' : terrain === 'flat' ? 'warn' : 'wait'}
+          text={terrain === 'trek' ? 'NASA Trek terrain' : terrain === 'flat' ? 'Smooth sphere (Trek terrain failed)' : 'Loading'}
+        />
+        <StatusItem
+          label="Backend"
+          state={api === 'ok' ? 'ok' : api === 'down' ? 'warn' : 'wait'}
+          text={api === 'ok' ? 'Connected' : api === 'down' ? 'Not reachable' : 'Checking'}
+        />
+        <Text ml="auto" color="gray.500">
+          Images and terrain: NASA/JPL-Caltech Mars Trek · USGS
+        </Text>
+      </Flex>
+    </Box>
   )
 }
 
-function StatusDot({ label, state, text }: { label: string; state: 'ok' | 'warn' | 'wait'; text: string }) {
-  const color = state === 'ok' ? 'bg-emerald-500' : state === 'warn' ? 'bg-nasa-red' : 'bg-slate-400'
+/** A coloured dot with a label: green = fine, red = problem, grey = waiting. */
+function StatusItem({ label, state, text }: { label: string; state: 'ok' | 'warn' | 'wait'; text: string }) {
+  const palette = state === 'ok' ? 'green' : state === 'warn' ? 'red' : 'gray'
   return (
-    <span className="flex items-center gap-1.5">
-      <span className={`h-2 w-2 rounded-full ${color}`} aria-hidden />
-      <span className="font-medium text-slate-700">{label}:</span> {text}
-    </span>
-  )
-}
-
-function Key({ children }: { children: string }) {
-  return (
-    <kbd className="rounded border border-slate-300 bg-slate-50 px-1 py-px font-sans text-[11px] font-medium text-slate-700">
-      {children}
-    </kbd>
+    <HStack gap="1.5">
+      <Status.Root size="sm" colorPalette={palette}>
+        <Status.Indicator />
+      </Status.Root>
+      <Text>
+        <Text as="span" fontWeight="medium" color="gray.700">
+          {label}:
+        </Text>{' '}
+        {text}
+      </Text>
+    </HStack>
   )
 }

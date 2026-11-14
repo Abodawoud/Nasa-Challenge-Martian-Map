@@ -302,6 +302,11 @@ We **never** call Route B "safest". Slope is only one danger. Rocks, sand, dust 
 
 The 2.5D mode (Cesium "Columbus view", a tilted flat map) is dropped. Near the ground it showed the same as 3D, but with fewer controls (fixed tilt, lower zoom-out limit). It also caused several bugs: the map stopped drawing, and the camera went through the ground, because Cesium's own ground check does not work there with Trek terrain. **What we give up:** the "tilted map" look. 3D near the ground gives the same picture. Switching between 2D and 3D now keeps the same place and about the same zoom. Older mentions of 2.5D in this plan are history.
 
+
+### D16. UI library: Chakra UI + Lucide (2026-11-14)
+
+The user asked for Chakra UI and Lucide icons (the same libraries as their other projects). Tailwind was removed, so there is one styling system. Good: ready-made accessible components, one theme file, a consistent icon set. Cost: a larger bundle than plain utility classes. The style stays the clean NASA website look (section 9).
+
 ---
 
 ## 5. How the system works (architecture)

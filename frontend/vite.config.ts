@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 
 // Cesium needs its Workers, Assets, Widgets and ThirdParty folders served as
@@ -14,7 +13,6 @@ const apiTarget = process.env.API_URL ?? 'http://localhost:8000'
 export default defineConfig({
   plugins: [
     react(),
-    tailwindcss(),
     viteStaticCopy({
       targets: ['Workers', 'Assets', 'Widgets', 'ThirdParty'].map((dir) => ({
         src: `${cesiumBuild}/${dir}`,

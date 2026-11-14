@@ -1,25 +1,4 @@
-@import 'tailwindcss';
-
-/* Clean NASA website style (PLAN.md section 9). */
-@theme {
-  --color-nasa-blue: #0b3d91;
-  --color-nasa-blue-dark: #082c6b;
-  --color-nasa-red: #fc3d21;
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
-
-body {
-  font-family: var(--font-sans);
-  color: #1f2937;
-  -webkit-font-smoothing: antialiased;
-}
+/* Plain CSS for the map background only. Everything else is styled with Chakra UI (theme.ts). */
 
 /* Space gradient behind the (transparent) Cesium canvas. Seen around the globe in 3D from space. */
 .mars-space {

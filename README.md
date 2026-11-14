@@ -98,7 +98,7 @@ flowchart LR
 | Part | Technology |
 |---|---|
 | Map engine | CesiumJS 1.147, one viewer, Mars as a sphere with radius 3,396,190 m (same as NASA's data) |
-| Screen | React 19, TypeScript, Vite, Tailwind CSS. Clean NASA website style |
+| Screen | React 19, TypeScript, Vite, **Chakra UI 3** (theme in `src/theme.ts`), **Lucide** icons. Clean NASA website style |
 | Backend | Python 3.12, FastAPI |
 | Running | Docker Compose (`fe` and `be`) |
 
