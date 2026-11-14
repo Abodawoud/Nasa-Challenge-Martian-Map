@@ -27,7 +27,7 @@
 // Simple and robust: no Cesium internals are changed. If a guess is off, the only cost is a few
 // extra or missing downloads, never a wrong picture.
 import * as Cesium from 'cesium'
-import { layerConfig, tileUrl } from './imagery'
+import { layerConfig, tileUrl, isTileHidden } from './imagery'
 
 /** A camera position and orientation, as for camera.setView / camera.flyTo. */
 export interface CameraView {
@@ -190,6 +190,7 @@ function planView(viewer: Cesium.Viewer, view: CameraView, groundHeight: number)
       if (!nw || !se) continue
       for (let ix = nw.x; ix <= se.x; ix++) {
         for (let iy = nw.y; iy <= se.y; iy++) {
+          if (isTileHidden(config, scheme, ix, iy, imageLevel)) continue
           const url = tileUrl(config, ix, iy, imageLevel)
           add(url, () => download(url))
         }

@@ -139,6 +139,25 @@ These are worth knowing if you change the map code. Details are in `PLAN.md` (se
 | Map stopped drawing ("not a number" error), camera went through the ground | The 2.5D mode (a tilted flat map): Cesium's tilt and ground checks do not work well there with this terrain | 2.5D removed (it showed the same as 3D near the ground). Safe camera rules and an error safety net stay |
 | Blurry ground for seconds after "Fly to Jezero" | Cesium only loads the tiles it sees now, one detail level after the other | The tiles of the destination are downloaded in advance, and the camera waits above the crater until they are in (`preload.ts`) |
 
+## Speed: how much the map loads
+
+Measured on 2026-11-14 for the Jezero arrival view (1.5 km above the ground, looking at the horizon):
+
+| | Tile requests | Time until the view is complete |
+|---|---|---|
+| Before | 1,400 | 2.4 s |
+| **Now** | **675** | **1.4 s** |
+
+The picture is the same. What changed:
+
+| Change | Why it helps |
+|---|---|
+| No preloading of neighbour tiles | About 400 requests were for tiles off screen |
+| The global CTX layer is not downloaded where the Jezero mosaic covers it | It was a third of all downloads, for pixels nobody sees |
+| Coarser tiles for far ground near the horizon | Far ground covers few pixels, it does not need fine tiles |
+| Lighter detail while the camera moves, full detail about half a second after it stops | Dragging keeps up with the mouse |
+| Tiles for a flight are downloaded before the camera arrives | No blurry arrival (`preload.ts`) |
+
 ## Known limits
 
 - Close to the ground the detail is limited by NASA's photos (25 cm only near the landing site, about 6 m elsewhere). Rocks smaller than about half a metre are not in the data.

@@ -79,11 +79,42 @@ function createProvider(layer: ImageryLayerConfig): Cesium.ImageryProvider {
 }
 
 /** Add every configured layer to the viewer, in order (later layers draw on top). */
+/**
+ * True when a tile lies completely inside an area where a layer on top hides this layer.
+ * Used by the provider (no download) and by the preloader (no warm-up download).
+ */
+export function isTileHidden(layer: ImageryLayerConfig, scheme: Cesium.TilingScheme, x: number, y: number, level: number): boolean {
+  if (!layer.hiddenUnder) return false
+  const tile = scheme.tileXYToRectangle(x, y, level)
+  const west = Cesium.Math.toDegrees(tile.west)
+  const south = Cesium.Math.toDegrees(tile.south)
+  const east = Cesium.Math.toDegrees(tile.east)
+  const north = Cesium.Math.toDegrees(tile.north)
+  return layer.hiddenUnder.some(([w, s, e, n]) => west >= w && south >= s && east <= e && north <= n)
+}
+
+/** Answer hidden tiles with an empty 1 x 1 image instead of asking the server. */
+function withHiddenTilesSkipped<T extends Cesium.ImageryProvider>(provider: T, layer: ImageryLayerConfig): T {
+  const original = provider.requestImage.bind(provider)
+  provider.requestImage = ((x: number, y: number, level: number, request?: Cesium.Request) => {
+    if (isTileHidden(layer, provider.tilingScheme, x, y, level)) {
+      // An empty ImageBitmap, like every other tile (see tint.ts for why not a canvas).
+      // Built from ImageData: transferToImageBitmap() on a canvas without a context throws,
+      // and an error here leaves the tile "loading" forever (seen in testing).
+      return createImageBitmap(new ImageData(1, 1))
+    }
+    return original(x, y, level, request)
+  }) as typeof provider.requestImage
+  return provider
+}
+
 export function addImageryLayers(viewer: Cesium.Viewer, layers: ImageryLayerConfig[]) {
   const added = new Map<string, Cesium.ImageryLayer>()
   for (const layer of layers) {
     let provider = createProvider(layer)
     if (layer.tintToMars) provider = withMarsTint(provider, layer.greyLevels)
+    // Wrapped last, so a hidden tile is neither downloaded nor tinted.
+    if (layer.hiddenUnder) provider = withHiddenTilesSkipped(provider, layer)
     const imagery = new Cesium.ImageryLayer(provider, {
       minimumTerrainLevel: layer.minimumZoomLevel,
     })

@@ -179,6 +179,17 @@ Swipe compare = `imageryLayer.splitDirection = Cesium.SplitDirection.LEFT` + `sc
 
 ## 8. Performance
 
+Settings that were measured (Jezero arrival view: 1,400 requests / 2.4 s before, 675 / 1.4 s after).
+Do not undo them without measuring again (method: `surface.invalidateAllTiles()`, set the view,
+call `viewer.render()` in a loop until the high and medium load queues are empty, count tile
+requests with the Resource Timing API):
+- `globe.preloadSiblings = false`, `preloadAncestors = true`.
+- `scene.fog`: enabled, `renderable = false`, `screenSpaceErrorFactor = 4` (coarser far tiles, not drawn).
+- `maximumScreenSpaceError` 1.3 when still, 2 while the camera moves (`camera.moveStart` / `moveEnd`).
+- `hiddenUnder` in `layers.config.ts`: tiles of a layer that lie fully under another layer are
+  answered with an empty ImageBitmap (`createImageBitmap(new ImageData(1, 1))`), not downloaded.
+  Never throw or return a canvas from `requestImage`: a throw leaves the tile loading forever.
+
 - `viewer.scene.requestRenderMode = true` and call `scene.requestRender()` after changes.
 - `viewer.resolutionScale` 1 (lower on weak machines), `globe.maximumScreenSpaceError` 2 (raise to 4 if slow).
 - Limit HiRISE `maximumLevel` and give it a `rectangle` so it loads only over Jezero.

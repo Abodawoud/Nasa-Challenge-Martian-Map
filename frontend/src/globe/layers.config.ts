@@ -23,6 +23,11 @@ interface BaseImageryLayer {
   defaultOpacity: number
   visible: boolean
   source: string
+  /**
+   * Areas [west, south, east, north] where another layer on top fully covers this one.
+   * Tiles that lie completely inside are not downloaded: nobody could see them.
+   */
+  hiddenUnder?: Array<[number, number, number, number]>
   /** Recolour a black-and-white layer to Mars colours (visual only, see tint.ts). */
   tintToMars?: boolean
   /** Grey range of this source, stretched before colouring (see tint.ts). */
@@ -77,6 +82,16 @@ export const IMAGERY_LAYERS: ImageryLayerConfig[] = [
     defaultOpacity: 1,
     visible: true,
     source: 'NASA/JPL/MSSS/Caltech Murray Lab/Esri',
+    // The aligned Jezero mosaic (next layer) covers these areas completely. Measured on
+    // 2026-11-14 from its level 8 tiles: full coverage except one tile south-east of the
+    // crater (77.34-78.05 E, 17.58-18.28 N), which has gaps and is left out here.
+    // Near Jezero this layer was a third of all tile downloads, for pixels nobody sees.
+    hiddenUnder: [
+      [75.25, 18.29, 78.74, 18.97],
+      [75.25, 16.18, 78.74, 17.57],
+      [75.25, 17.58, 77.33, 18.28],
+      [78.06, 17.58, 78.74, 18.28],
+    ],
     tintToMars: true,
     greyLevels: [100, 168],
   },
