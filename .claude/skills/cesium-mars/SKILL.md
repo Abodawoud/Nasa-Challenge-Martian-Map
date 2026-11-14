@@ -112,6 +112,14 @@ Perseverance path (ArcGIS feature service): `https://trek.nasa.gov/mars/trekarcg
 - The global CTX (Esri OnMars) is "uncontrolled": strips can be offset at seams.
 - To debug imagery, compare with the raw tiles first (draw them on a canvas in the page).
 
+### 3D mouse controls near the ground
+
+Cesium's own 3D drag and tilt grab the smooth sphere, which is about 5.6 km below Trek's ground,
+so near the surface they move the camera the wrong way (worse after a Ctrl + drag tilt).
+`src/globe/groundControls.ts` replaces them below 300 km above the ground: drag = move over the
+ground, Ctrl + drag (or middle drag) = orbit around the screen-centre ground point. Do not
+re-enable Cesium's rotate / tilt / translate in 3D near the ground.
+
 ## 5. Terrain
 
 - Display terrain: Trek's own quantized-mesh service, CORS `*` ✅, levels 0–17 over Jezero ✅.

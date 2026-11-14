@@ -3,6 +3,7 @@ import * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { MARS_ELLIPSOID, PERSEVERANCE_LANDING } from './mars'
 import { createTrekTerrain } from './trekTerrain'
+import { installGroundControls } from './groundControls'
 import { IMAGERY_LAYERS } from './layers.config'
 import { addImageryLayers } from './imagery'
 
@@ -265,9 +266,13 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     })
 
     // Per-mode limits: 2.5D has a fixed tilt and a lower zoom-out limit.
+    // In 3D near the ground, groundControls.ts takes over drag and tilt (and switches
+    // Cesium's own off). In 2D and 2.5D Cesium's own drag is used.
     const applyModeLimits = () => {
       const cv = scene.mode === Cesium.SceneMode.COLUMBUS_VIEW
       ssc.enableTilt = !cv
+      ssc.enableRotate = true
+      ssc.enableTranslate = true
       ssc.maximumZoomDistance = cv ? MAX_HEIGHT_CV_M : MAX_CAMERA_DISTANCE_M
     }
     applyModeLimits()
@@ -367,12 +372,20 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
       onCursor({ lon: Cesium.Math.toDegrees(carto.longitude), lat: Cesium.Math.toDegrees(carto.latitude) })
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE)
 
+    const removeGroundControls = installGroundControls(viewer, () => {
+      const carto = viewer.camera.positionCartographic
+      const measured = scene.globe.getHeight(carto)
+      if (measured !== undefined) lastGroundHeight = measured
+      return carto.height - (measured ?? lastGroundHeight)
+    })
+
     onReady(viewer)
     // Development only: reach the viewer from the browser console for checks.
     if (import.meta.env.DEV) (window as unknown as { __viewer: Cesium.Viewer }).__viewer = viewer
 
     return () => {
       destroyed = true
+      removeGroundControls()
       handler.destroy()
       viewer.destroy()
     }
