@@ -28,6 +28,8 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
 
+  // Smooth zoom: the step is spread over ~350 ms with an ease-out curve, frame by frame.
+  // Works the same in 2D, 2.5D and 3D because it uses Cesium's own zoomIn / zoomOut.
   const zoom = (direction: 1 | -1) => {
     if (!viewer) return
     const { camera, scene } = viewer
@@ -36,9 +38,22 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
       scene.mode === Cesium.SceneMode.SCENE2D
         ? (frustum.right ?? 0) - (frustum.left ?? 0)
         : camera.positionCartographic.height
-    const amount = Math.abs(size) * 0.4
-    if (direction === 1) camera.zoomIn(amount)
-    else camera.zoomOut(amount)
+    const total = Math.abs(size) * 0.45
+    const duration = 350
+    const start = performance.now()
+    let done = 0
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3)
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      const target = total * easeOut(t)
+      const delta = target - done
+      done = target
+      if (direction === 1) camera.zoomIn(delta)
+      else camera.zoomOut(delta)
+      scene.requestRender()
+      if (t < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
   }
 
   const resetNorth = () => {

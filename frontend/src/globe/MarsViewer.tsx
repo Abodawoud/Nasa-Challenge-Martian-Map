@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react'
 import * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
-import { MARS_ELLIPSOID, MARS_TILING, PERSEVERANCE_LANDING } from './mars'
+import { MARS_ELLIPSOID, PERSEVERANCE_LANDING } from './mars'
 import { createTrekTerrain } from './trekTerrain'
-import { IMAGERY_LAYERS, TREK_TILE_ROOT } from './layers.config'
-import type { TrekImageryLayer } from './layers.config'
-import { tintToMars } from './tint'
+import { IMAGERY_LAYERS } from './layers.config'
+import { addImageryLayers } from './imagery'
 
 export type ViewMode = '2D' | '2.5D' | '3D'
 
@@ -25,34 +24,6 @@ interface Props {
   onReady: (viewer: Cesium.Viewer) => void
   onCursor: (info: CursorInfo | null) => void
   onTerrainStatus: (status: 'trek' | 'flat') => void
-}
-
-/** Trek WMTS provider that recolours black-and-white tiles to Mars colours (see tint.ts). */
-class TintedTrekProvider extends Cesium.WebMapTileServiceImageryProvider {
-  requestImage(x: number, y: number, level: number, request?: Cesium.Request) {
-    const pending = super.requestImage(x, y, level, request)
-    if (!pending) return pending
-    return Promise.resolve(pending).then((img) =>
-      tintToMars(img as CanvasImageSource & { width: number; height: number }),
-    ) as ReturnType<Cesium.WebMapTileServiceImageryProvider['requestImage']>
-  }
-}
-
-function makeTrekProvider(layer: TrekImageryLayer) {
-  const format = layer.ext === 'jpg' ? 'image/jpeg' : 'image/png'
-  const Provider = layer.tintToMars ? TintedTrekProvider : Cesium.WebMapTileServiceImageryProvider
-  return new Provider({
-    // The double slash after 1.0.0 is how Trek publishes its template. It is correct.
-    url: `${TREK_TILE_ROOT}/${layer.layerId}/1.0.0//{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.${layer.ext}`,
-    layer: layer.layerId,
-    style: 'default',
-    tileMatrixSetID: 'default028mm',
-    format,
-    tilingScheme: MARS_TILING,
-    maximumLevel: layer.maximumLevel,
-    rectangle: layer.bounds ? Cesium.Rectangle.fromDegrees(...layer.bounds) : undefined,
-    credit: new Cesium.Credit(layer.source),
-  })
 }
 
 export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
@@ -86,6 +57,14 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     scene.globe.enableLighting = false
     scene.globe.showGroundAtmosphere = false
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#8a5a44')
+    // Smoother moving: keep more tiles in memory and load neighbours early, so dragging
+    // does not keep reloading and redrawing the same ground.
+    scene.globe.tileCacheSize = 1000
+    scene.globe.preloadSiblings = true
+    scene.globe.preloadAncestors = true
+    // Only draw a new frame when something changes (saves work when the map is still).
+    scene.requestRenderMode = true
+    scene.maximumRenderTimeChange = Infinity
     scene.backgroundColor = Cesium.Color.TRANSPARENT
 
     // Stars only in 3D. In 2D and 2.5D the flat map floats on the page gradient.
@@ -163,11 +142,7 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     }
     scene.preRender.addEventListener(keepCameraSafe)
 
-    for (const layer of IMAGERY_LAYERS) {
-      const imagery = viewer.imageryLayers.addImageryProvider(makeTrekProvider(layer))
-      imagery.alpha = layer.defaultOpacity
-      imagery.show = layer.visible
-    }
+    addImageryLayers(viewer, IMAGERY_LAYERS)
 
     // Trek's own terrain. If it fails, fall back to a smooth sphere (README risk list).
     createTrekTerrain()
