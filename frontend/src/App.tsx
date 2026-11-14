@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as Cesium from 'cesium'
-import { Box, Button, Circle, Flex, Group, Heading, HStack, Kbd, Status, Text } from '@chakra-ui/react'
-import { Box as Box3D, Map as MapIcon, MapPin, Mouse, Rocket, Satellite } from 'lucide-react'
+import { Box, Button, Circle, Flex, Group, Heading, HStack, Kbd, Link, Status, Text } from '@chakra-ui/react'
+import { Box as Box3D, Compass, Map as MapIcon, MapPin, Mouse, Rocket } from 'lucide-react'
 import { MarsViewer, flyToJezero, setViewMode } from './globe/MarsViewer'
 import type { CursorInfo, ViewMode } from './globe/MarsViewer'
 import { MapControls } from './ui/MapControls'
@@ -66,7 +66,7 @@ export default function App() {
   return (
     // Three rows: top bar, map, status bar. The map has its own area in the middle, so the
     // bars never cover any part of it.
-    <Flex direction="column" h="full" w="full" overflow="hidden">
+    <Flex direction="column" h="100vh" w="full" overflow="hidden">
       {/* Top bar */}
       <Flex
         as="header"
@@ -81,19 +81,21 @@ export default function App() {
         zIndex="1"
         flexShrink={0}
       >
-        <HStack gap="3">
-          <Circle size="9" bg="brand.600" color="white">
-            <Satellite size={18} aria-hidden />
-          </Circle>
-          <Box lineHeight="short">
-            <Heading as="h1" size="sm" color="gray.900">
-              Martian Map
-            </Heading>
-            <Text fontSize="xs" color="gray.500">
-              Jezero Crater Marswalk Planner
-            </Text>
-          </Box>
-        </HStack>
+        <Link href="#/" aria-label="Back to the Red Compass start page" _hover={{ textDecoration: 'none' }}>
+          <HStack gap="3">
+            <Circle size="9" bg="nasaRed" color="white">
+              <Compass size={18} aria-hidden />
+            </Circle>
+            <Box lineHeight="short">
+              <Heading as="h1" size="sm" color="gray.900">
+                Martian Map
+              </Heading>
+              <Text fontSize="xs" color="gray.500">
+                Red Compass · Jezero Crater
+              </Text>
+            </Box>
+          </HStack>
+        </Link>
 
         <Group attached ml="auto" role="group" aria-label="View mode">
           {MODES.map(({ mode: m, Icon: ModeIcon, hint }) => (

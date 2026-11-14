@@ -20,7 +20,8 @@ docker compose up --build
 
 | Part | Address |
 |---|---|
-| The map | http://localhost:5173 |
+| Landing page (team Red Compass) | http://localhost:5173 |
+| The map | http://localhost:5173/#/map |
 | Backend health check | http://localhost:8000/api/health |
 | Backend API docs | http://localhost:8000/docs |
 
@@ -29,6 +30,20 @@ Code changes show up live: the frontend reloads in the browser, and the backend 
 No data is stored in this project. All images and 3D ground are loaded live from NASA services, so an internet connection is needed.
 
 ---
+
+## The landing page
+
+The first screen presents the idea of team **Red Compass**, in the team colours red and blue.
+
+| Part | What it is |
+|---|---|
+| 3D planet | A Three.js Mars globe with the real NASA Viking colour mosaic, a blue glow and two orbit rings |
+| Scroll story | GSAP ScrollTrigger: the planet moves beside the text, turns to Jezero (red pin), then moves closer and two route lines are drawn |
+| Sections | Hero · The idea (three steps) · The data (four NASA sources) · Team and call to action |
+| Honesty | Route planning is marked **Coming next**. The route lines on the globe are an illustration, not calculated routes |
+| Entry to the map | Every "Open the map" button leads to `/#/map`. The compass mark in the map's top bar leads back |
+
+The landing page and the map are loaded separately: the landing page does not download the map engine.
 
 ## What you can do now
 
@@ -106,7 +121,11 @@ flowchart LR
 
 ```
 frontend/src/
-├─ App.tsx                     top bar, status bar, view-mode buttons
+├─ Root.tsx                    chooses the screen: landing page or map (/#/map)
+├─ landing/Landing.tsx         the landing page (Chakra + GSAP scroll story)
+├─ landing/MarsScene.ts        the 3D Mars of the landing page (Three.js)
+├─ theme.ts                    Chakra theme
+├─ App.tsx                     the map screen: top bar, status bar, view-mode buttons
 ├─ globe/
 │  ├─ MarsViewer.tsx           Cesium viewer, camera limits, fly to Jezero, Mars sky
 │  ├─ mars.ts                  Mars sphere, landing site, terrain address

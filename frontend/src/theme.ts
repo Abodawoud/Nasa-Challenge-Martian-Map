@@ -6,7 +6,8 @@ const FONT = "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif"
 
 const config = defineConfig({
   globalCss: {
-    'html, body, #root': { height: '100%', margin: 0 },
+    // The map fills the window exactly. The landing page is taller and scrolls.
+    'html, body': { margin: 0, minHeight: '100%' },
     body: { color: 'gray.800' },
   },
   theme: {
