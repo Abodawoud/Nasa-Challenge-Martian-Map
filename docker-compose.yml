@@ -1,0 +1,28 @@
+# Start everything:  docker compose up --build
+# Screen:            http://localhost:5173
+# Backend docs:      http://localhost:8000/docs
+services:
+  be:
+    build: ./backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend/app:/app/app            # code changes without rebuilding
+      - dem-cache:/data                   # USGS DEM copy (M3), never in git
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  fe:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    environment:
+      - API_URL=http://be:8000            # Vite sends /api/* here
+      - VITE_POLL=1                       # file watching inside Docker on Windows
+    volumes:
+      - ./frontend:/app                   # code changes appear live
+      - /app/node_modules                 # keep the container's own node_modules
+    depends_on:
+      - be
+
+volumes:
+  dem-cache:

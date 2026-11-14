@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+
+/* Clean NASA website style (README section 9). */
+@theme {
+  --color-nasa-blue: #0b3d91;
+  --color-nasa-blue-dark: #082c6b;
+  --color-nasa-red: #fc3d21;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: #1f2937;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Space gradient behind the (transparent) Cesium canvas. Seen around the flat map in 2D and 2.5D. */
+.mars-space {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(80, 110, 170, 0.35), transparent 70%),
+    radial-gradient(ellipse 70% 50% at 50% 110%, rgba(150, 80, 50, 0.25), transparent 70%),
+    linear-gradient(180deg, #0b1630 0%, #070c1c 55%, #05070f 100%);
+}
+
+/* Hide Cesium's default credit bar. Credits are shown in our own footer. */
+.cesium-viewer-bottom {
+  display: none !important;
+}

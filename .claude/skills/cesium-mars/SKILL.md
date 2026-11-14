@@ -15,8 +15,12 @@ Everything here was checked live on 2026-11-14 unless marked ⚠️. The plan an
 2. **Mars is a sphere, radius 3,396,190 m.** Not `Cesium.Ellipsoid.MARS` (that one is flattened
    at the poles, 3396190 × 3376200, and puts Jezero ~10 km off against Trek data).
 3. **Set the ellipsoid before creating anything.** Objects made before keep WGS84.
-4. **Routes are drawn with explicit heights** from our DEM (`Cartesian3.fromDegrees(lon, lat, h)`),
-   never `clampToGround` / `HeightReference.CLAMP_TO_GROUND` (unreliable off Earth and in 2D).
+4. **Routes are drawn with explicit heights** (`Cartesian3.fromDegrees(lon, lat, h)`), never
+   `clampToGround` / `HeightReference.CLAMP_TO_GROUND` (unreliable off Earth and in 2D).
+   **The drawing height `h` comes from the Trek terrain** (`sampleTerrainMostDetailed`), NOT from
+   the USGS DEM. Measured in M0: Trek terrain gives +5,638.8 m at the landing site, the real
+   areoid height is about −2,570 m. Trek uses another height zero. USGS heights are for the
+   numbers shown in the UI only.
 5. **No Cesium ion.** No token, no `Ion.defaultAccessToken`, no `createWorldTerrain`, no Bing
    imagery, no Cesium Mars 3D Tiles (asset 3644333 does not support 2D).
 6. **Coordinates are planetocentric, east-positive longitude, degrees.** Jezero is about
@@ -100,8 +104,10 @@ Perseverance path (ArcGIS feature service): `https://trek.nasa.gov/mars/trekarcg
 - Display terrain: Trek's own quantized-mesh service, CORS `*` ✅, levels 0–17 over Jezero ✅.
   `await Cesium.CesiumTerrainProvider.fromUrl('https://marshub.s3.amazonaws.com/mars_v14', { requestVertexNormals: true })`
   ⚠️ Undocumented endpoint. Wrap in try/catch and fall back to `EllipsoidTerrainProvider({ ellipsoid: MARS })`.
-- ⚠️ Check that the terrain's ellipsoid matches our sphere (landing site height should be about
-  −2,500 m against the areoid, terrain must not float above imagery).
+- ✅ Works with our sphere: imagery drapes correctly, 2D, 2.5D and 3D all work (M0, 2026-11-14).
+- ⚠️ Its heights use a different zero (+5,639 m at the landing site against about −2,570 m real).
+  Never show Trek terrain heights as numbers. ⚠️ M3: check the relief is not vertically stretched
+  by comparing height differences (delta top against crater floor) with the USGS DEM.
 - Ground styling (MONOLITH look): `Cesium.Material.fromType('ElevationContour' | 'ElevationRamp' | 'SlopeRamp')`
   on `viewer.scene.globe.material`. ⚠️ Test how it mixes with imagery.
 - For values in the HUD, read OUR DEM grid (exact numbers), not `sampleTerrainMostDetailed`.

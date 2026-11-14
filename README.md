@@ -270,7 +270,7 @@ We **never** call Route B "safest". Slope is only one danger. Rocks, sand, dust 
 | Option | Good | Bad |
 |---|---|---|
 | "Clamp to ground" (Cesium sticks the line to the terrain) | Easy | Known problems on non-Earth planets |
-| ✅ **Use heights from our own DEM for every route point** | Works the same in 2D, 2.5D and 3D. The route matches the numbers we show | A little extra code |
+| ✅ **Sample the Trek terrain height for every route point** (Cesium `sampleTerrainMostDetailed`) | The line sits exactly on the 3D ground we show, in 2D, 2.5D and 3D | A little extra code. **Numbers** still come from the USGS DEM (Trek terrain uses a different height zero, see section 12) |
 
 ### D12. Can we reuse other projects?
 
@@ -632,7 +632,7 @@ Each milestone ends with something we can **show**.
 | Wrong planet shape | Everything moves ~10 km | Use the sphere (D7). Test in M0 |
 | Mars in 2D / 2.5D not working well in Cesium | Broken view | Test first in M0. Backup: 3D with a "top view" camera button |
 | Lines don't stick to the ground | Routes float or sink | Use our own heights (D11) |
-| Height reference mismatch | Route heights ≠ 3D ground | Read the DEM metadata in M3. Compare a few points with Trek |
+| Height reference mismatch | Route heights ≠ 3D ground | **Confirmed in M0:** Trek terrain says **+5,639 m** at the landing site, while the real height is about **−2,570 m** (areoid). Trek uses a different zero, about 8.2 km off. **Fix:** draw route points at Trek terrain height (`sampleTerrainMostDetailed`). Show numbers (heights, slopes, climb) only from the USGS DEM. In M3, also check that Trek relief is not stretched vertically |
 | 20 m hides small cliffs and rocks | Slopes look too easy | Show "calculated at 20 m" in the app. Thermal hint for rocky ground |
 | Not enough time | Unfinished demo | Strict order M0 → M7 and the cut line |
 
