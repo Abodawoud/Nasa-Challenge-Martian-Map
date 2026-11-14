@@ -302,6 +302,84 @@ We **never** call Route B "safest". Slope is only one danger. Rocks, sand, dust 
 
 ## 5. How the system works (architecture)
 
+### 5.1 In simple pictures
+
+**The three parts:** Screen = **Cesium** (draws Mars) · Pictures = **NASA Trek** (live, nothing stored) · Calculator = **our backend** (uses USGS height numbers).
+
+```mermaid
+flowchart LR
+    U["👩‍🚀 You<br/>(in the browser)"]
+
+    subgraph DOCKER["🐳 Docker: one command starts both"]
+        FE["🖥️ Screen<br/>React + Cesium<br/><i>draws Mars</i>"]
+        BE["🧮 Calculator<br/>FastAPI backend<br/><i>does the maths</i>"]
+        VOL[("💾 Cache box<br/>height file copy")]
+    end
+
+    TREK["🛰️ NASA Mars Trek<br/>photos, 3D hills,<br/>heat and mineral maps"]
+    USGS["🗺️ USGS<br/>Jezero height file<br/>(numbers)"]
+
+    U -->|clicks, zooms| FE
+    FE -->|"asks for pictures<br/>(live, nothing stored)"| TREK
+    FE -->|"asks: route A to B?"| BE
+    BE -->|"answers: 2 routes + numbers"| FE
+    USGS -->|"downloaded once<br/>at start"| BE
+    BE <--> VOL
+```
+
+**What happens when you ask for a route:**
+
+```mermaid
+sequenceDiagram
+    actor You
+    participant Screen as 🖥️ Screen (Cesium)
+    participant Calc as 🧮 Calculator (backend)
+    participant Trek as 🛰️ NASA Trek
+
+    You->>Screen: Open the app
+    Screen->>Trek: Give me Mars photos + 3D hills
+    Trek-->>Screen: Pictures (only the part you see)
+    You->>Screen: Click start 🟢 and goal 🔴
+    Screen->>Calc: Find routes from 🟢 to 🔴
+    Note over Calc: Uses the USGS height numbers<br/>Route A = shortest<br/>Route B = gentler slopes
+    Calc-->>Screen: 2 routes + distance, climb, slope, time
+    Screen-->>You: Draws both routes on Mars + shows the numbers
+```
+
+**Two kinds of data:**
+
+```mermaid
+flowchart TB
+    subgraph LOOK["👀 Data to LOOK at (pictures)<br/>from NASA Trek, live"]
+        A1["🌍 Colour map of all Mars"]
+        A2["📷 Sharp photos of Jezero<br/>CTX 6 m · HiRISE 25 cm"]
+        A3["⛰️ 3D hills"]
+        A4["🌡️ Heat map: rock or sand?"]
+        A5["💎 Mineral map: where water was"]
+    end
+
+    subgraph CALC["🔢 Data to CALCULATE with (numbers)<br/>from USGS, via our backend"]
+        B1["📏 Height grid of Jezero<br/>one number every 20 m"]
+    end
+
+    LOOK --> SCREEN["🖥️ Cesium shows them on Mars"]
+    CALC --> ROUTES["🧮 Routes, slopes, travel time"]
+    ROUTES --> SCREEN
+```
+
+**Think of a restaurant:**
+
+```mermaid
+flowchart LR
+    C["🧑 Customer<br/>= You"] -->|orders| T["🍽️ Table and plate<br/>= Cesium screen"]
+    T -->|order| K["👨‍🍳 Kitchen<br/>= backend"]
+    F["🚜 Farm<br/>= NASA Trek"] -->|fresh pictures| T
+    I["🥕 Ingredients<br/>= USGS heights"] --> K
+    K -->|cooked route| T
+```
+
+### 5.2 Technical view
+
 ```
                      docker compose up
 ┌──────────────────────────────┐            ┌──────────────────────────────────────┐
