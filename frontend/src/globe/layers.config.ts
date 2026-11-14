@@ -62,7 +62,9 @@ export const IMAGERY_LAYERS: ImageryLayerConfig[] = [
   },
   {
     // Global CTX mosaic (Caltech Murray Lab), served by Esri "OnMars". Same Mars 2000 sphere
-    // (wkid 104971), 512 px tiles, level 0 = 2 × 1 tiles from -180,90. CORS: *. Usable to level 13.
+    // (wkid 104971), 512 px tiles, level 0 = 2 × 1 tiles from -180,90. CORS: *.
+    // Deepest level is 12 (checked 2026-11-14: level 13 answers HTTP 400, which filled the
+    // console with "Failed to obtain image tile" and kept the map status on "Loading").
     // It makes everything around Jezero sharp, so the Jezero layers no longer look like a patch.
     kind: 'url-template',
     id: 'ctx-global',
@@ -70,7 +72,7 @@ export const IMAGERY_LAYERS: ImageryLayerConfig[] = [
     category: 'optical',
     url: 'https://astro.arcgis.com/arcgis/rest/services/OnMars/CTX/MapServer/tile/{z}/{y}/{x}',
     tileSize: 512,
-    maximumLevel: 13,
+    maximumLevel: 12,
     minimumZoomLevel: 7,
     defaultOpacity: 1,
     visible: true,

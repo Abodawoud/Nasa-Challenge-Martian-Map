@@ -1,6 +1,6 @@
 ---
 name: cesium-mars
-description: Verified facts and rules for building this project's Mars map with CesiumJS - the Mars sphere, NASA Trek WMTS imagery, Trek terrain, 2D/2.5D/3D scene modes, drawing routes with explicit heights, the layer config, and the Jezero DEM. Load before writing or changing ANY code that touches Cesium, map layers, coordinates, terrain or routes.
+description: Verified facts and rules for building this project's Mars map with CesiumJS - the Mars sphere, NASA Trek WMTS imagery, Trek terrain, 2D/3D scene modes, drawing routes with explicit heights, the layer config, and the Jezero DEM. Load before writing or changing ANY code that touches Cesium, map layers, coordinates, terrain or routes.
 ---
 
 # Cesium on Mars (this project)
@@ -39,11 +39,11 @@ const tiling = new Cesium.GeographicTilingScheme({ ellipsoid: MARS })
 
 const viewer = new Cesium.Viewer(container, {
   globe: new Cesium.Globe(MARS),
-  mapProjection: new Cesium.GeographicProjection(MARS),   // needed for 2D / 2.5D
+  mapProjection: new Cesium.GeographicProjection(MARS),   // needed for 2D
   skyAtmosphere: new Cesium.SkyAtmosphere(MARS),          // or false
   baseLayer: false,              // we add Trek imagery ourselves
   baseLayerPicker: false, geocoder: false, homeButton: false,
-  sceneModePicker: false,        // we build our own 2D / 2.5D / 3D switch
+  sceneModePicker: false,        // we build our own 2D / 3D switch
   navigationHelpButton: false, timeline: false, animation: false,
   infoBox: false, selectionIndicator: false, fullscreenButton: false,
 })
@@ -59,12 +59,18 @@ unmount, guard against React StrictMode double-mount.
 
 | UI label | Cesium | Call |
 |---|---|---|
-| 2D | `SceneMode.SCENE2D` | `viewer.scene.morphTo2D(1.0)` |
-| 2.5D | `SceneMode.COLUMBUS_VIEW` | `viewer.scene.morphToColumbusView(1.0)` |
-| 3D | `SceneMode.SCENE3D` | `viewer.scene.morphTo3D(1.0)` |
+| 2D | `SceneMode.SCENE2D` | `setViewMode(viewer, '2D')` (wraps `scene.morphTo2D(1.0)`) |
+| 3D | `SceneMode.SCENE3D` | `setViewMode(viewer, '3D')` (wraps `scene.morphTo3D(1.0)`) |
 
-⚠️ 2D and 2.5D on a custom ellipsoid have no official example. Test in M0. Fallback: 3D with a
-top-down camera preset.
+- **No 2.5D (Columbus view).** Dropped on 2026-11-14 (PLAN.md D15): same picture as 3D near the
+  ground, fewer controls, and the source of several camera bugs. Do not add it back.
+- **A switch keeps the place.** `setViewMode` reads the view BEFORE the morph (camera values are
+  not valid while `scene.mode === MORPHING`) and applies it on `scene.morphComplete`, inside
+  try/catch. 3D to 2D: centre = `globe.pick` of the centre ray, width = 2 · distance · tan(fovy/2)
+  · aspect. 2D to 3D: look north at the 2D centre, pitch −45°, same width, above the Trek ground.
+- **In 2D, the height given to `camera.setView` / `flyTo` becomes the view width** on the ground
+  (Camera.js `setView2D`: frustum right − left = height). The 2D frustum is an
+  `OrthographicOffCenterFrustum`: width = `right − left`.
 
 ## 4. NASA Trek imagery (WMTS)
 
@@ -109,7 +115,15 @@ Perseverance path (ArcGIS feature service): `https://trek.nasa.gov/mars/trekarcg
 - **One seamless source per zoom range.** Far: Viking colour. Near: `Jezero_CTX_BlockAdj_dd`
   (aligned CTX, seamless) over Jezero, global CTX elsewhere. Closest: HiRISE from terrain
   level 14 only. Do not stack several mosaics at the same zoom: each has its own brightness.
-- The global CTX (Esri OnMars) is "uncontrolled": strips can be offset at seams.
+- The global CTX (Esri OnMars) is "uncontrolled": strips can be offset at seams. Its deepest
+  level is 12 (level 13 answers HTTP 400). A few of its tiles near Jezero are broken files on
+  the server (valid PNG header, cannot be decoded): "Failed to obtain image tile" for those
+  is expected and harmless, they are under the Jezero mosaic.
+- "Is the view ready" = `visibleTilesLoaded()` in `preload.ts`, not `globe.tilesLoaded`
+  (that one also waits for tiles Cesium preloads around the view).
+- Testing note: Chrome throttles a window that is covered by other windows to about 1 to 6
+  frames per second. Animations and tile loading then look slow. Check
+  `requestAnimationFrame` rate before blaming the app (one frame costs under 4 ms here).
 - To debug imagery, compare with the raw tiles first (draw them on a canvas in the page).
 
 ### 3D mouse controls near the ground
@@ -128,13 +142,14 @@ re-enable Cesium's rotate / tilt / translate in 3D near the ground.
 - Display terrain: Trek's own quantized-mesh service, CORS `*` ✅, levels 0–17 over Jezero ✅.
   `await Cesium.CesiumTerrainProvider.fromUrl('https://marshub.s3.amazonaws.com/mars_v14', { requestVertexNormals: true })`
   ⚠️ Undocumented endpoint. Wrap in try/catch and fall back to `EllipsoidTerrainProvider({ ellipsoid: MARS })`.
-- ✅ Works with our sphere: imagery drapes correctly, 2D, 2.5D and 3D all work (M0, 2026-11-14).
+- ✅ Works with our sphere: imagery drapes correctly, 2D and 3D work (M0, 2026-11-14).
 - ⚠️ **Always load it with `createTrekTerrain()` (`src/globe/trekTerrain.ts`), never with plain
   `CesiumTerrainProvider.fromUrl`.** Trek's tile headers carry bounding spheres computed for another
   planet shape (about 12 km and 2 km of height off). Cesium then culls visible tiles, which made
   holes and "cut" strips. `createTrekTerrain()` rebuilds each sphere from the tile's OBB.
-- Camera limits live in `MarsViewer.tsx`: at least 25 m above the ground, pitch at most +15°,
-  zoom out at most 25,000 km, 2D zoom between 1 km across and the whole map.
+- Camera limits live in `MarsViewer.tsx`: 3D at least 25 m above the ground, pitch at most +15°,
+  zoom out at most 25,000 km. 2D zoom between 1 km across and the whole map, the map always
+  fills the screen and its edges stop at the screen edges.
 - ⚠️ Its heights use a different zero (+5,639 m at the landing site against about −2,570 m real).
   Never show Trek terrain heights as numbers. ⚠️ M3: check the relief is not vertically stretched
   by comparing height differences (delta top against crater floor) with the USGS DEM.
@@ -167,3 +182,10 @@ Swipe compare = `imageryLayer.splitDirection = Cesium.SplitDirection.LEFT` + `sc
 - `viewer.scene.requestRenderMode = true` and call `scene.requestRender()` after changes.
 - `viewer.resolutionScale` 1 (lower on weak machines), `globe.maximumScreenSpaceError` 2 (raise to 4 if slow).
 - Limit HiRISE `maximumLevel` and give it a `rectangle` so it loads only over Jezero.
+- **Load a destination before flying there: `src/globe/preload.ts`.** Cesium's own flight preload
+  (`scene.preloadFlightCamera`) only works for 3D Tiles, never for the globe (checked in the
+  1.147 source). `preloadView(viewer, view, groundHeight)` plans the terrain and imagery tiles of a
+  camera view with Cesium's own rules, keeps the nearest 500, and downloads them at low priority
+  into the browser HTTP cache. `waitForTiles` holds a pause until `globe.tilesLoaded`. Use both for
+  every new "fly to" (intro, sites). Imagery URLs come from `tileUrl()` in `imagery.ts`: the same
+  template as the providers, so the cache entry matches.

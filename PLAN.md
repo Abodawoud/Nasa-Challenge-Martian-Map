@@ -298,6 +298,10 @@ We **never** call Route B "safest". Slope is only one danger. Rocks, sand, dust 
 | Earth walking formula only | Simple | Wrong gravity |
 | ✅ **Mars-gravity walking model + suit/load factors + rover option, labelled "estimate"** | Uses real physics (gravity) and answers the challenge (suits, equipment, rovers) | Some numbers are assumptions, so we show them openly |
 
+### D15. Two view modes only: 2D and 3D (decided with the user, 2026-11-14)
+
+The 2.5D mode (Cesium "Columbus view", a tilted flat map) is dropped. Near the ground it showed the same as 3D, but with fewer controls (fixed tilt, lower zoom-out limit). It also caused several bugs: the map stopped drawing, and the camera went through the ground, because Cesium's own ground check does not work there with Trek terrain. **What we give up:** the "tilted map" look. 3D near the ground gives the same picture. Switching between 2D and 3D now keeps the same place and about the same zoom. Older mentions of 2.5D in this plan are history.
+
 ---
 
 ## 5. How the system works (architecture)

@@ -2,7 +2,7 @@
 
 **NASA Space Apps 2026 · Challenge: Interplanetary Survival Guide: Martian Map**
 
-A web map of Mars built on real NASA data. You can fly from space down to **Jezero Crater** (where the Perseverance rover landed), switch between 2D, 2.5D and 3D, and go down to 25 m above the ground to look at the crater floor, the river delta and the horizon.
+A web map of Mars built on real NASA data. You can fly from space down to **Jezero Crater** (where the Perseverance rover landed), switch between 2D and 3D, and go down to 25 m above the ground to look at the crater floor, the river delta and the horizon.
 
 > **This file describes what works today.** The full plan, every decision with its trade-offs, and the next milestones are in [`PLAN.md`](PLAN.md).
 
@@ -35,19 +35,19 @@ No data is stored in this project. All images and 3D ground are loaded live from
 | Feature | How |
 |---|---|
 | See Mars as a globe with NASA colour images | Opens like this |
-| **Fly to Jezero** | Button at the top right. The camera first shows the whole crater from above, pauses, then glides down to 1.5 km above the ground |
-| **2D / 2.5D / 3D** | Buttons at the top right. 2D is a flat map, 2.5D is a tilted flat map with hills, 3D is the real planet |
+| **Fly to Jezero** | Button at the top right. The camera first shows the whole crater from above. It waits there until the ground below is loaded (at most 4 seconds), then glides down to 1.5 km above the ground. The ground at the end of the flight is downloaded in advance, so it arrives sharp |
+| **2D / 3D** | Buttons at the top right. 2D is a flat map, 3D is the real planet. Switching keeps the same place and about the same zoom. From 2D, 3D looks north at that place with a 45° tilt |
 | Go down to the surface | Zoom in to 25 m above the ground. Near the ground the sky turns Mars-coloured |
 | Coordinates under the mouse | Bottom left (latitude and longitude, on the 3D ground) |
 | Map controls | Bottom right: zoom in and out (smooth, grey out at the limits), compass (click to face north), whole planet, fullscreen |
-| Status | Bottom bar: 3D ground source and backend connection |
+| Status | Bottom bar: map tiles (loading or ready), 3D ground source and backend connection |
 
 ### Mouse controls
 
-| | 3D near the ground (below 300 km) | 3D far away (globe) | 2D and 2.5D |
+| | 3D near the ground (below 300 km) | 3D far away (globe) | 2D |
 |---|---|---|---|
 | **Drag** | Move over the ground. The point you grab stays under the cursor, with a short glide when you let go | Spin the planet | Move the map |
-| **Ctrl + drag** or **middle drag** | Right / left turns the view around the screen centre. Up tilts towards the horizon, down tilts towards a top view | Tilt | Turn (2.5D tilt is fixed at −50°) |
+| **Ctrl + drag** or **middle drag** | Right / left turns the view around the screen centre. Up tilts towards the horizon, down tilts towards a top view | Tilt | Turn |
 | **Drag on the sky** | Look around in place | | |
 | **Wheel** | Zoom | Zoom | Zoom |
 
@@ -58,7 +58,6 @@ A short reminder of these is shown in the bottom bar.
 | View | Closest | Furthest | Other |
 |---|---|---|---|
 | 3D | 25 m above the ground | 25,000 km | Tilt from straight down to 15° above the horizon |
-| 2.5D | 25 m above the ground | 400 km high | Fixed tilt −50°. The map always fills the screen |
 | 2D | 1 km across | The whole map | The map always fills the screen. Edges stop at the screen edge |
 
 ---
@@ -115,7 +114,8 @@ frontend/src/
 │  ├─ imagery.ts               builds the layers from that list
 │  ├─ tint.ts                  Mars colour tint for black-and-white photos
 │  ├─ trekTerrain.ts           Trek 3D ground, with a fix for its tile bounds
-│  └─ groundControls.ts        mouse controls in 3D near the ground
+│  ├─ groundControls.ts        mouse controls in 3D near the ground
+│  └─ preload.ts               downloads the tiles of a place before the camera gets there
 └─ ui/MapControls.tsx          zoom, compass, whole planet, fullscreen
 backend/app/main.py            FastAPI app (/api/health)
 docker-compose.yml             runs both parts
@@ -136,8 +136,8 @@ These are worth knowing if you change the map code. Details are in `PLAN.md` (se
 | Patchy colours | Several photo mosaics stacked at the same zoom | One seamless source per zoom range |
 | Sunlit slopes turned white | The tint kept each pixel's brightness, and very bright pixels can't hold colour | The photo is multiplied by a light Mars tan, like a colour filter: the brightest result is tan, never white (`tint.ts`) |
 | Dragging in 3D moved the wrong way, the ground slid under the cursor | Cesium's drag grabs the smooth sphere, 5.6 km below Trek's ground. A first own version only estimated the movement (up to 150 px off) | Own controls with exact geometry: 0 px error in tests (`groundControls.ts`) |
-| Map stopped drawing ("not a number" error) | A tilt correction every frame in 2.5D | Fixed tilt in 2.5D, safe camera rules, and an error safety net |
-| Camera went through the ground in 2.5D | Cesium's ground check does not work there with this terrain | Own 25 m ground floor |
+| Map stopped drawing ("not a number" error), camera went through the ground | The 2.5D mode (a tilted flat map): Cesium's tilt and ground checks do not work well there with this terrain | 2.5D removed (it showed the same as 3D near the ground). Safe camera rules and an error safety net stay |
+| Blurry ground for seconds after "Fly to Jezero" | Cesium only loads the tiles it sees now, one detail level after the other | The tiles of the destination are downloaded in advance, and the camera waits above the crater until they are in (`preload.ts`) |
 
 ## Known limits
 

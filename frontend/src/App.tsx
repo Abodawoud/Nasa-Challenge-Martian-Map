@@ -3,10 +3,14 @@ import type * as Cesium from 'cesium'
 import { MarsViewer, flyToJezero, setViewMode } from './globe/MarsViewer'
 import type { CursorInfo, ViewMode } from './globe/MarsViewer'
 import { MapControls } from './ui/MapControls'
+import { visibleTilesLoaded } from './globe/preload'
 
 type ApiStatus = 'checking' | 'ok' | 'down'
 
-const MODES: ViewMode[] = ['2D', '2.5D', '3D']
+const MODES: ViewMode[] = ['2D', '3D']
+
+/** Short loads (moving the map a little) do not flash the status: show "Loading" after this. */
+const LOADING_DELAY_MS = 300
 
 export default function App() {
   const viewerRef = useRef<Cesium.Viewer | null>(null)
@@ -15,12 +19,33 @@ export default function App() {
   const [terrain, setTerrain] = useState<'loading' | 'trek' | 'flat'>('loading')
   const [api, setApi] = useState<ApiStatus>('checking')
   const [viewer, setViewer] = useState<Cesium.Viewer | null>(null)
+  const [tilesLoading, setTilesLoading] = useState(true)
 
   useEffect(() => {
     fetch('/api/health')
       .then((r) => setApi(r.ok ? 'ok' : 'down'))
       .catch(() => setApi('down'))
   }, [])
+
+  // Map status: "Loading" while tiles the camera can see are still waiting. Tiles that Cesium
+  // preloads around the view do not count (see visibleTilesLoaded).
+  useEffect(() => {
+    if (!viewer) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const remove = viewer.scene.globe.tileLoadProgressEvent.addEventListener(() => {
+      if (visibleTilesLoaded(viewer)) {
+        clearTimeout(timer)
+        timer = undefined
+        setTilesLoading(false)
+      } else if (timer === undefined) {
+        timer = setTimeout(() => setTilesLoading(true), LOADING_DELAY_MS)
+      }
+    })
+    return () => {
+      clearTimeout(timer)
+      remove()
+    }
+  }, [viewer])
 
   const onReady = useCallback((v: Cesium.Viewer) => {
     viewerRef.current = v
@@ -29,8 +54,8 @@ export default function App() {
 
   const changeMode = (m: ViewMode) => {
     if (!viewerRef.current || m === mode) return
-    setMode(m)
-    setViewMode(viewerRef.current, m)
+    // Ignored while a switch is still running.
+    if (setViewMode(viewerRef.current, m)) setMode(m)
   }
 
   return (
@@ -80,8 +105,9 @@ export default function App() {
           {cursor ? `Lat ${cursor.lat.toFixed(4)}° · Lon ${cursor.lon.toFixed(4)}° E` : 'Move the mouse over Mars'}
         </span>
         <span className="hidden text-slate-500 lg:inline">
-          <Key>Drag</Key> move · <Key>Ctrl</Key> + <Key>Drag</Key> turn and tilt · <Key>Wheel</Key> zoom
+          <Key>Drag</Key> move · <Key>Ctrl</Key> + <Key>Drag</Key> {mode === '2D' ? 'turn' : 'turn and tilt'} · <Key>Wheel</Key> zoom
         </span>
+        <StatusDot label="Map" state={tilesLoading ? 'wait' : 'ok'} text={tilesLoading ? 'Loading' : 'Ready'} />
         <StatusDot label="3D ground" state={terrain === 'trek' ? 'ok' : terrain === 'flat' ? 'warn' : 'wait'}
           text={terrain === 'trek' ? 'NASA Trek terrain' : terrain === 'flat' ? 'Smooth sphere (Trek terrain failed)' : 'Loading'} />
         <StatusDot label="Backend" state={api === 'ok' ? 'ok' : api === 'down' ? 'warn' : 'wait'}

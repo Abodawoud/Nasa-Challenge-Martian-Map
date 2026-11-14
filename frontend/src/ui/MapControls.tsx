@@ -14,7 +14,7 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
     if (!viewer) return
     const camera = viewer.camera
     camera.percentageChanged = 0.001
-    // During a 2D / 2.5D / 3D switch the camera has no heading for a moment. Skip those frames,
+    // During a 2D / 3D switch the camera has no heading for a moment. Skip those frames,
     // an error here would stop Cesium rendering.
     const update = () => {
       const h = camera.heading
@@ -49,7 +49,7 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
 
   // Smooth zoom: one step is 45% of the current size, spread over ~350 ms with an ease-out
   // curve. The step is cut to the room left before the limit, so it stops exactly there.
-  // Works the same in 2D, 2.5D and 3D because it uses Cesium's own zoomIn / zoomOut.
+  // Works the same in 2D and 3D because it uses Cesium's own zoomIn / zoomOut.
   const zoom = (direction: 1 | -1) => {
     if (!viewer) return
     const { camera, scene } = viewer

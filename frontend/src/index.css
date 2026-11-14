@@ -21,7 +21,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Space gradient behind the (transparent) Cesium canvas. Seen around the flat map in 2D and 2.5D. */
+/* Space gradient behind the (transparent) Cesium canvas. Seen around the globe in 3D from space. */
 .mars-space {
   background:
     radial-gradient(ellipse 80% 60% at 50% 0%, rgba(80, 110, 170, 0.35), transparent 70%),
