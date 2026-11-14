@@ -447,7 +447,8 @@ All addresses below were checked on 2026-11-14.
 | Layer | Type | Address / Trek layer name | Notes |
 |---|---|---|---|
 | Global colour | Optical | `Mars_Viking_MDIM21_ClrMosaic_global_232m` | 232 m, whole planet |
-| **Global CTX (~5 m)** | Optical | `https://astro.arcgis.com/arcgis/rest/services/OnMars/CTX/MapServer/tile/{z}/{y}/{x}` (Caltech Murray Lab / Esri, 512 px tiles, Mars 2000 sphere, CORS ✅) | Covers all of Jezero and its surroundings, so the sharp area has no hard edge |
+| **Jezero region CTX, aligned (~6 m)** | Optical | Trek `Jezero_CTX_BlockAdj_dd` (block-adjusted: strips aligned to each other) | **Main Jezero layer.** 75.2–78.9°E, 15.9–19.4°N |
+| **Global CTX (~5 m)** | Optical | `https://astro.arcgis.com/arcgis/rest/services/OnMars/CTX/MapServer/tile/{z}/{y}/{x}` (Caltech Murray Lab / Esri, 512 px tiles, Mars 2000 sphere, CORS ✅) | Rest of Mars. "Uncontrolled": strips can shift at seams (a crater looked cut), so the aligned mosaic is used over Jezero |
 | Jezero CTX | Optical | `JEZ_ctx_B_soc_008_orthoMosaic_6m_Eqc_latTs0_lon0` | 6 m. Area 77.16–77.70°E, 18.21–18.72°N |
 | Jezero HiRISE | Optical | `JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd` | 25 cm, centre of the crater |
 | 3D ground | Topographic | `https://marshub.s3.amazonaws.com/mars_v14/layer.json` | Whole planet, very sharp at Jezero ⚠️ undocumented |

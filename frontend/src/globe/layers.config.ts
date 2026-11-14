@@ -72,6 +72,24 @@ export const IMAGERY_LAYERS: ImageryLayerConfig[] = [
     greyLevels: [100, 168],
   },
   {
+    // Block-adjusted CTX mosaic: all strips aligned to each other, so craters are not cut
+    // where two strips meet (the global CTX above is "uncontrolled" and can shift at seams).
+    // Covers all of Jezero and its surroundings. Levels 0 to 12, png.
+    kind: 'trek-wmts',
+    id: 'ctx-jezero-region',
+    title: 'Jezero region CTX mosaic, aligned (~6 m)',
+    category: 'optical',
+    layerId: 'Jezero_CTX_BlockAdj_dd',
+    ext: 'png',
+    maximumLevel: 12,
+    bounds: [75.1537692, 15.9058484, 78.8717121, 19.4453003],
+    defaultOpacity: 1,
+    visible: true,
+    source: 'NASA/JPL-Caltech/MSSS/USGS, Mars Trek',
+    tintToMars: true,
+    greyLevels: [40, 200],
+  },
+  {
     kind: 'trek-wmts',
     id: 'ctx-jezero',
     title: 'Jezero CTX mosaic, controlled (6 m)',
