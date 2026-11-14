@@ -18,7 +18,7 @@ Do not change a decision in code without changing it in the README first.
 |---|---|
 | Any code that touches Cesium, layers, coordinates, terrain, routes | `cesium-mars` (project) |
 | Any animation, intro, transition, count-up | `demo-motion` (project), then `gsap-skills` plugin (`gsap-react`, `gsap-timeline`) |
-| The look of the HUD (dark mission-control / telemetry) | `brutalist-skill` (Tactical Telemetry, dark mode) + `taste-skill` |
+| The look of the UI (**clean NASA website style**, see README section 9: white panels, NASA blue `#0B3D91`, NASA red `#FC3D21` for alerts only, Inter) | `taste-skill`. Do **not** use `brutalist-skill` (dark style was not chosen) |
 | Any UI component, panel, button, form | `web-interface-guidelines` |
 | README, UI text, warnings, demo script | `writing-style` (B1 English) |
 | Long files that must be complete | `output-skill` |

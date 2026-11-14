@@ -540,7 +540,22 @@ NASA does **not** give a public "route from A to B" tool for Mars. We build it w
 
 ## 9. Look and feel
 
-Idea: the dark "mission control" style of [MONOLITH](https://kaolti.github.io/monolith-terrain/), rebuilt with Cesium tools (no code copied).
+**Decision (2026-11-14): Option C, a clean NASA website style.**
+
+| Option | Good | Bad |
+|---|---|---|
+| A. Dark mission control (MONOLITH) | Dramatic, high-tech | Small text on dark needs care |
+| B. Astronaut helmet HUD | Big "wow" | Hard to read, more design work |
+| ✅ **C. Clean NASA website** | **Easy to read, fast to build, looks official** | Less "wow". The Mars map must carry the visual impact |
+
+**Style rules**
+- **Colours:** white and light grey panels, **NASA blue `#0B3D91`** for headers and main buttons, **NASA red `#FC3D21`** only for alerts and the active route. Dark grey text `#1F2937`.
+- **Font:** Inter (or the system font). Numbers use tabular figures so they don't jump.
+- **Layout:** a top bar (title + 2D/2.5D/3D + search), a left panel (layers), a right panel (route results), and the map fills the rest.
+- **Panels** sit on the map as white cards with a soft shadow, so they are readable on top of Mars.
+- **Lots of space**, clear headings, short labels, no decoration.
+
+**Ground effects (still used, they help the science):**
 
 | Effect | How in Cesium |
 |---|---|
@@ -549,7 +564,6 @@ Idea: the dark "mission control" style of [MONOLITH](https://kaolti.github.io/mo
 | Slope colours (shows *why* Route B goes where it goes) | `SlopeRamp` material |
 | Height labels | Labels with real heights |
 | Camera tour | The intro fly-in, plus an optional tour of the delta |
-| Mission-control screen | Dark HUD panels (React + Tailwind) |
 
 ⚠️ Test early: how these ground styles mix with the Trek images on our Mars.
 
@@ -626,9 +640,9 @@ Each milestone ends with something we can **show**.
 
 ## 13. Open questions
 
-1. Do you **approve** the foundation: Cesium + Trek live data + USGS 20 m DEM (D2–D5)?
-2. **Style:** MONOLITH dark mission-control, or another example?
-3. **Must-have features** for the demo: contours / slope colours / camera tour / rover path / height chart / swipe compare?
+1. ~~Foundation?~~ ✅ Approved on recommendation: Cesium + Trek live data + FastAPI backend + USGS 20 m DEM. M0 tests it, with backups if a check fails
+2. ~~Style?~~ ✅ Option C, clean NASA website (section 9)
+3. ~~Must-have features?~~ ✅ All, in milestone order. The cut line in section 11 decides what is dropped if time runs out
 4. ~~Tools installed?~~ ✅ Node 24, Python 3.14, Docker 29 + Compose, Git (checked 2026-11-14)
 5. ~~Hosting?~~ ✅ Docker Compose locally. Public link decided in M7
 
