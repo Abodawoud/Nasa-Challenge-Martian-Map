@@ -115,8 +115,8 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
           <Navigation2
             size={18}
             aria-hidden
-            color="#fc3d21"
-            fill="#fc3d21"
+            color="#e8231f"
+            fill="#e8231f"
             style={{ transform: `rotate(${-heading}deg)`, transition: 'transform 120ms' }}
           />
         </ControlButton>

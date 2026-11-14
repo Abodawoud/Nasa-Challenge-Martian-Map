@@ -7,8 +7,9 @@ Do not change a decision in code without changing it in PLAN.md first.
 
 ## Stack (decided, see PLAN.md section 4)
 
-- `frontend/`: React + TypeScript + Vite · **Chakra UI 3** for all UI (theme: `src/theme.ts`, colour palette `brand` = NASA blue) · **Lucide** icons (`lucide-react`) · **CesiumJS only** (one viewer, no second map engine) · Motion + GSAP. No Tailwind: do not add utility class names.
-- Two screens (`src/Root.tsx`): the landing page (`src/landing/`, Three.js globe + GSAP ScrollTrigger, team **Red Compass**, colours red `#fc3d21` and blue `#4f8cff` on navy `#05070f`, display font Unbounded) and the map at `/#/map` (clean NASA style). Three.js is only for the landing page: the map stays Cesium only.
+- `frontend/`: React + TypeScript + Vite · **Chakra UI 3** for all UI (theme: `src/theme.ts`, colour palette `brand` = the logo's navy) · **Lucide** icons (`lucide-react`) · **CesiumJS only** (one viewer, no second map engine) · Motion + GSAP. No Tailwind: do not add utility class names.
+- Two screens (`src/Root.tsx`): the landing page (`src/landing/`, Three.js globe + GSAP ScrollTrigger, team **Red Compass**, display font Unbounded) and the map at `/#/map` (clean NASA style). Three.js is only for the landing page: the map stays Cesium only.
+- **Brand colours come from the Red Compass logo:** navy `#0c1a3d`, red `#e8231f`, white. No other accent colours (no bright blue). The team mark is `src/ui/CompassStar.tsx`.
 - `backend/`: Python 3.12 + FastAPI · rasterio + numpy + scikit-image (`MCP_Geometric` least-cost path).
 - `docker-compose.yml`: `fe` + `be` + a cache volume for the DEM. Run with `docker compose up`.
 - **APIs only, no data in git.** The frontend streams Trek tiles and terrain directly. The backend downloads the USGS DEM from its public URL into the cache volume.

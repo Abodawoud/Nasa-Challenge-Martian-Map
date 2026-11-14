@@ -33,11 +33,11 @@ No data is stored in this project. All images and 3D ground are loaded live from
 
 ## The landing page
 
-The first screen presents the idea of team **Red Compass**, in the team colours red and blue.
+The first screen presents the idea of team **Red Compass**, in the colours of the team logo: navy `#0c1a3d`, red `#e8231f` and white.
 
 | Part | What it is |
 |---|---|
-| 3D planet | A Three.js Mars globe with the real NASA Viking colour mosaic, a blue glow and two orbit rings |
+| 3D planet | A Three.js Mars globe with the real NASA Viking colour mosaic, a navy-blue glow and two orbit rings (red and white) |
 | Scroll story | GSAP ScrollTrigger: the planet moves beside the text, turns to Jezero (red pin), then moves closer and two route lines are drawn |
 | Sections | Hero · The idea (three steps) · The data (four NASA sources) · Team and call to action |
 | Honesty | Route planning is marked **Coming next**. The route lines on the globe are an illustration, not calculated routes |

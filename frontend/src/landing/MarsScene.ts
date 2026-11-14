@@ -23,8 +23,11 @@ export interface SceneState {
   routes: number
 }
 
-const RED = 0xfc3d21
-const BLUE = 0x4f8cff
+// From the Red Compass logo: bright red, and white with a little blue for the light accent.
+const RED = 0xe8231f
+const LIGHT = 0xdfe6ff
+/** The rim glow: a cool navy-blue light, like the planet seen against the logo's navy sky. */
+const GLOW = 0x5f7fe0
 
 export const JEZERO = { lat: 18.44, lon: 77.45 }
 
@@ -109,11 +112,11 @@ export function createMarsScene(canvas: HTMLCanvasElement, texture: Promise<THRE
     globeMaterial.needsUpdate = true
   })
 
-  // Blue rim glow (the "blue" of the team colours). It stays still while the globe turns.
+  // Rim glow in the logo's navy-blue. It stays still while the globe turns.
   const glow = new THREE.Mesh(
     new THREE.SphereGeometry(1.16, 64, 64),
     new THREE.ShaderMaterial({
-      uniforms: { glowColor: { value: new THREE.Color(BLUE) } },
+      uniforms: { glowColor: { value: new THREE.Color(GLOW) } },
       vertexShader: 'varying vec3 vNormal; void main() { vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader:
         'varying vec3 vNormal; uniform vec3 glowColor; void main() { float i = pow(0.62 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0); gl_FragColor = vec4(glowColor, 1.0) * i; }',
@@ -125,7 +128,7 @@ export function createMarsScene(canvas: HTMLCanvasElement, texture: Promise<THRE
   )
   group.add(glow)
 
-  // Two thin orbit rings, red and blue: a quiet "compass" around the planet.
+  // Two thin orbit rings, red and white, like the swoosh and the orbit line of the logo.
   const ring = (radius: number, color: number, opacity: number, rx: number, rz: number) => {
     const mesh = new THREE.Mesh(
       new THREE.TorusGeometry(radius, 0.0035, 8, 200),
@@ -136,7 +139,7 @@ export function createMarsScene(canvas: HTMLCanvasElement, texture: Promise<THRE
     return mesh
   }
   const redRing = ring(1.42, RED, 0.75, Math.PI / 2.25, 0.35)
-  const blueRing = ring(1.6, BLUE, 0.4, Math.PI / 1.9, -0.5)
+  const whiteRing = ring(1.6, LIGHT, 0.35, Math.PI / 1.9, -0.5)
 
   // Jezero pin: a red dot with a ring that pulses.
   const pin = new THREE.Group()
@@ -157,7 +160,7 @@ export function createMarsScene(canvas: HTMLCanvasElement, texture: Promise<THRE
     globe.add(mesh)
     return { geometry, total: geometry.index ? geometry.index.count : 0 }
   }
-  const routeLines = [routeLine(0, RED), routeLine(1.6, BLUE)]
+  const routeLines = [routeLine(0, RED), routeLine(1.6, LIGHT)]
 
   const resize = () => {
     const width = canvas.clientWidth
@@ -189,9 +192,9 @@ export function createMarsScene(canvas: HTMLCanvasElement, texture: Promise<THRE
     // The rings fade while the routes are shown, so they do not cross the text and the lines.
     const ringFade = 1 - state.routes * 0.9
     ;(redRing.material as THREE.MeshBasicMaterial).opacity = 0.75 * ringFade
-    ;(blueRing.material as THREE.MeshBasicMaterial).opacity = 0.4 * ringFade
+    ;(whiteRing.material as THREE.MeshBasicMaterial).opacity = 0.35 * ringFade
     redRing.rotation.z = 0.35 + time * 0.05
-    blueRing.rotation.z = -0.5 - time * 0.03
+    whiteRing.rotation.z = -0.5 - time * 0.03
     stars.rotation.y = time * 0.004
 
     pin.visible = state.marker > 0.01

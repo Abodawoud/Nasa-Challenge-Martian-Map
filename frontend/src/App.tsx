@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as Cesium from 'cesium'
-import { Box, Button, Circle, Flex, Group, Heading, HStack, Kbd, Link, Status, Text } from '@chakra-ui/react'
-import { Box as Box3D, Compass, Map as MapIcon, MapPin, Mouse, Rocket } from 'lucide-react'
+import { Box, Button, Flex, Group, Heading, HStack, Kbd, Link, Status, Text } from '@chakra-ui/react'
+import { Box as Box3D, Map as MapIcon, MapPin, Mouse, Rocket } from 'lucide-react'
 import { MarsViewer, flyToJezero, setViewMode } from './globe/MarsViewer'
 import type { CursorInfo, ViewMode } from './globe/MarsViewer'
 import { MapControls } from './ui/MapControls'
+import { CompassStar } from './ui/CompassStar'
 import { visibleTilesLoaded } from './globe/preload'
 
 type ApiStatus = 'checking' | 'ok' | 'down'
@@ -83,9 +84,7 @@ export default function App() {
       >
         <Link href="#/" aria-label="Back to the Red Compass start page" _hover={{ textDecoration: 'none' }}>
           <HStack gap="3">
-            <Circle size="9" bg="nasaRed" color="white">
-              <Compass size={18} aria-hidden />
-            </Circle>
+            <CompassStar size={36} />
             <Box lineHeight="short">
               <Heading as="h1" size="sm" color="gray.900">
                 Martian Map

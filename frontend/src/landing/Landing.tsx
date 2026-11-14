@@ -9,18 +9,22 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Badge, Box, Button, Container, Flex, Heading, HStack, Link, SimpleGrid, Text, VStack } from '@chakra-ui/react'
-import { ArrowDown, ArrowRight, Camera, Compass, Globe, Layers, MapPin, Mountain, Route } from 'lucide-react'
+import { ArrowDown, ArrowRight, Camera, Globe, Layers, MapPin, Mountain, Route } from 'lucide-react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { JEZERO, createMarsScene, facingLongitude, loadMarsTexture } from './MarsScene'
 import type { SceneState } from './MarsScene'
+import { CompassStar, LOGO_NAVY, LOGO_RED } from '../ui/CompassStar'
 
 gsap.registerPlugin(ScrollTrigger)
 
-// Team colours: red and blue on deep space navy.
-const RED = '#fc3d21'
-const BLUE = '#4f8cff'
-const INK = '#05070f'
+// Team colours, taken from the Red Compass logo: bright red, deep navy and white.
+const RED = LOGO_RED
+const NAVY = LOGO_NAVY
+/** A soft white with a little blue: the light accent on navy (the logo's white). */
+const LIGHT = '#dfe6ff'
+/** The page background: the logo's navy, a step darker, so the planet and the red stand out. */
+const INK = '#070d22'
 const DISPLAY_FONT = "'Unbounded', 'Inter', system-ui, sans-serif"
 
 const STEPS = [
@@ -133,7 +137,7 @@ export default function Landing() {
       bg={INK}
       overflowX="clip"
       // Soft blue and red glows over deep navy, with a faint grid: the team's look.
-      backgroundImage={`radial-gradient(60% 50% at 8% 55%, rgba(31,82,172,0.42), transparent 70%), radial-gradient(45% 40% at 96% 12%, rgba(252,61,33,0.22), transparent 70%), linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)`}
+      backgroundImage={`radial-gradient(60% 50% at 8% 55%, rgba(38,62,140,0.55), transparent 70%), radial-gradient(45% 40% at 96% 12%, rgba(232,35,31,0.24), transparent 70%), linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)`}
       backgroundSize="auto, auto, 120px 120px, 120px 120px"
       backgroundAttachment="fixed"
     >
@@ -144,11 +148,9 @@ export default function Landing() {
       <Flex as="header" position="fixed" top="4" insetX="0" zIndex="20" justify="center" px="4">
         <Flex w="full" maxW="1120px" align="center" justify="space-between" gap="4">
           <HStack gap="2.5">
-            <Flex boxSize="9" align="center" justify="center" borderRadius="full" bg={RED} color="white" boxShadow={`0 0 24px ${RED}66`}>
-              <Compass size={19} aria-hidden />
-            </Flex>
+            <CompassStar size={38} />
             <Text fontFamily={DISPLAY_FONT} fontWeight="600" fontSize="sm" letterSpacing="0.02em">
-              red compass
+              RED COMPASS
             </Text>
           </HStack>
 
@@ -238,7 +240,7 @@ export default function Landing() {
                         borderRadius="xl"
                         borderWidth="1px"
                         borderColor={active ? 'whiteAlpha.300' : 'transparent'}
-                        bg={active ? 'rgba(10,16,34,0.72)' : 'transparent'}
+                        bg={active ? `${NAVY}cc` : 'transparent'}
                         backdropFilter={active ? 'blur(12px)' : undefined}
                         transition="all 0.35s ease"
                       >
@@ -250,7 +252,7 @@ export default function Landing() {
                               {title}
                             </Text>
                             {!ready && (
-                              <Badge size="sm" borderRadius="full" px="2" bg="rgba(79,140,255,0.18)" color={BLUE} borderWidth="1px" borderColor="rgba(79,140,255,0.4)">
+                              <Badge size="sm" borderRadius="full" px="2" bg="whiteAlpha.200" color={LIGHT} borderWidth="1px" borderColor="whiteAlpha.400">
                                 Coming next
                               </Badge>
                             )}
@@ -284,7 +286,7 @@ export default function Landing() {
                 <Heading as="h2" mt="3" fontFamily={DISPLAY_FONT} fontWeight="500" lineHeight="1.08" letterSpacing="-0.02em" fontSize={{ base: '2rem', md: '3.1rem' }}>
                   Nothing invented.
                   <br />
-                  <Box as="span" color={BLUE}>
+                  <Box as="span" color={RED}>
                     All from NASA.
                   </Box>
                 </Heading>
@@ -295,12 +297,12 @@ export default function Landing() {
               </Box>
               <SimpleGrid mt="8" columns={{ base: 1, sm: 2 }} gap="3">
                 {DATA.map(({ value, label, text, Icon }) => (
-                  <Box key={label} data-reveal p="5" borderRadius="2xl" borderWidth="1px" borderColor="whiteAlpha.200" bg="rgba(10,16,34,0.66)" backdropFilter="blur(12px)">
+                  <Box key={label} data-reveal p="5" borderRadius="2xl" borderWidth="1px" borderColor="whiteAlpha.200" bg={`${NAVY}b3`} backdropFilter="blur(12px)">
                     <HStack justify="space-between" align="start">
                       <Text fontFamily={DISPLAY_FONT} fontSize="2xl" fontWeight="500">
                         {value}
                       </Text>
-                      <Icon size={18} aria-hidden color={BLUE} />
+                      <Icon size={18} aria-hidden color={LIGHT} />
                     </HStack>
                     <Text mt="2" fontWeight="600" fontSize="sm">
                       {label}
@@ -361,7 +363,7 @@ function PrimaryButton({ children, onClick, size }: { children: ReactNode; onCli
       color="white"
       bg={RED}
       boxShadow={`0 8px 28px ${RED}55`}
-      _hover={{ bg: '#e5341a', transform: 'translateY(-1px)' }}
+      _hover={{ bg: '#c91b17', transform: 'translateY(-1px)' }}
       _active={{ transform: 'translateY(0)' }}
       transition="all 0.2s ease"
     >
