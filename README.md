@@ -37,7 +37,7 @@ The first screen presents the idea of team **Red Compass**. Colours come from th
 
 | Part | What it is |
 |---|---|
-| 3D space scene | Three.js: Mars with the real NASA Viking colour mosaic (a sharper version loads in the background), a blue glow, two orbit rings, stars, and red rocks with a rough stone surface that tumble slowly (the rock surface is drawn by code, it is not a photo) |
+| 3D space scene | Three.js: Mars with the real NASA Viking colour mosaic (a sharper version loads in the background), an orange-red glow, two orbit rings, stars, and red rocks with a rough stone surface that tumble slowly (the rock surface is drawn by code, it is not a photo) |
 | Top bar | Glass pills: "NASA Space Apps Challenge 2026" and the Red Compass mark, the section menu, and the "Open the map" button |
 | Scroll story | Smooth scrolling (Lenis) + GSAP ScrollTrigger: the planet moves beside the text, turns to Jezero (red pin), then shows a START and a GOAL point with two winding routes |
 | Sections | First screen · Mission (three steps) · Data system (four NASA sources) · Interface · About Red Compass |

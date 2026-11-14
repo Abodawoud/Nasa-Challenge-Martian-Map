@@ -31,8 +31,8 @@ export interface SceneState {
 const RED = 0xe8231f
 const EMBER = 0xff4a1c
 const LIGHT = 0xffffff
-/** The blue of the glow around the planet. */
-const GLOW = 0x3f7bff
+/** The glow around the planet: the orange-red of Mars itself. */
+const GLOW = 0xff7038
 
 export const JEZERO = { lat: 18.44, lon: 77.45 }
 /** The far end of the illustrated routes: an invented "science goal" north-west of Jezero. */
@@ -269,7 +269,7 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
     metalness: 0.04,
     // A little warm light of their own, so the side away from the sun is dark red, not black.
     emissive: 0x4a0d06,
-    emissiveIntensity: 0.55,
+    emissiveIntensity: 0.22,
   })
   const rockMeshes = Array.from({ length: SHAPES }, (_, shape) => {
     const mesh = new THREE.InstancedMesh(rockGeometry(shape * 7.31 + 1.7), rockMaterial, Math.ceil(ROCKS / SHAPES))
@@ -287,11 +287,12 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
     // The big rocks stay at the sides and near the viewer, where their surface can be seen
     // and they do not cover the text.
     const side = Math.random() < 0.5 ? -1 : 1
-    const x = big ? side * (2.1 + Math.random() * 2.6) : (Math.random() * 2 - 1) * 5.4
+    const x = big ? side * (2.6 + Math.random() * 2.2) : (Math.random() * 2 - 1) * 5.4
     const y = (Math.random() * 2 - 1) * (big ? 2.0 : 2.6) + 0.2
-    const z = big ? 0.4 + Math.random() * 2.2 : (Math.random() * 2 - 1) * 2.4
+    // Not too near the viewer: a rock close to the camera looks as if it floats above the page.
+    const z = big ? -0.2 + Math.random() * 1.3 : -2.4 + Math.random() * 3.6
     // Most rocks are tiny, a few are larger.
-    const size = big ? 0.05 + Math.random() * 0.07 : 0.008 + Math.random() ** 3 * 0.04
+    const size = big ? 0.05 + Math.random() * 0.06 : 0.008 + Math.random() ** 3 * 0.04
     const mesh = rockMeshes[i % SHAPES]
     const item = {
       mesh,
@@ -304,7 +305,7 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
     }
     rockItems.push(item)
     // From dark rust to a brighter red.
-    mesh.setColorAt(item.index, tint.setHSL(0.02 + Math.random() * 0.035, 0.75, 0.5 + Math.random() * 0.4))
+    mesh.setColorAt(item.index, tint.setHSL(0.02 + Math.random() * 0.035, 0.7, 0.34 + Math.random() * 0.3))
     haloPositions.set([x, y, z], i * 3)
   }
   const turnRocks = (time: number) => {
@@ -366,7 +367,7 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
     })
   }
 
-  // Blue rim glow around the planet. It stays still while the globe turns.
+  // Orange-red rim glow around the planet. It stays still while the globe turns.
   const rim = new THREE.Mesh(
     new THREE.SphereGeometry(1.1, 96, 96),
     new THREE.ShaderMaterial({
@@ -443,6 +444,8 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
     ;(object.material as THREE.Material & { opacity: number }).opacity = value
   }
 
+  const pinWorld = new THREE.Vector3()
+  const globeWorld = new THREE.Vector3()
   const clock = new THREE.Clock()
   let frame = 0
   let running = true
@@ -474,6 +477,14 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
     turnRocks(time)
 
     const beat = (time * 0.8) % 1
+    // The labels are drawn on top of everything, so without this they would show through
+    // the planet when their point has turned to the far side.
+    const facing = (item: typeof start) => {
+      item.pin.getWorldPosition(pinWorld)
+      globe.getWorldPosition(globeWorld)
+      const towards = pinWorld.clone().sub(globeWorld).normalize().dot(camera.position.clone().sub(pinWorld).normalize())
+      return THREE.MathUtils.smoothstep(towards, 0.12, 0.35)
+    }
     const showPin = (item: typeof start, amount: number) => {
       item.pin.visible = amount > 0.01
       item.pulse.scale.setScalar(1 + 0.7 * beat)
@@ -481,11 +492,13 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
       setOpacity(item.dot, amount)
       setOpacity(item.core, amount)
     }
-    showPin(start, state.marker)
-    showPin(goal, state.routes)
+    const startFacing = facing(start)
+    const goalFacing = facing(goal)
+    showPin(start, state.marker * startFacing)
+    showPin(goal, state.routes * goalFacing)
     // The START label appears with the routes: before that the pin is "Jezero", not a start.
-    setOpacity(start.label, state.routes)
-    setOpacity(goal.label, state.routes)
+    setOpacity(start.label, state.routes * startFacing)
+    setOpacity(goal.label, state.routes * goalFacing)
 
     for (const line of routeLines) {
       // Draw whole triangles only: a count that is a multiple of 3.

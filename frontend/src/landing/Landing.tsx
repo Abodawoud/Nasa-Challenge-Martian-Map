@@ -1,6 +1,6 @@
 // The landing page of team Red Compass.
 //
-// The look: black space full of stars, Mars rising from the bottom with a blue glow, glowing
+// The look: black space full of stars, Mars rising from the bottom with an orange-red glow, glowing
 // red rocks drifting around, and a dark veil that keeps the text easy to read. Below the
 // first screen, a pinned story shows the idea in three steps while the 3D scene changes.
 //
@@ -19,7 +19,7 @@ import { CompassStar, LOGO_NAVY, LOGO_RED } from '../ui/CompassStar'
 
 gsap.registerPlugin(ScrollTrigger)
 
-// Colours: the red and navy of the Red Compass logo, white on black space, a blue glow
+// Colours: the red and navy of the Red Compass logo, white on black space, an orange-red glow
 // around the planet. EMBER is the orange-red of the floating rocks, used for small accents.
 const RED = LOGO_RED
 const EMBER = '#ff4a1c'
@@ -99,7 +99,7 @@ export default function Landing() {
         // Step 3 looks at the middle between START and GOAL, close enough to read both.
         const middle = { lat: (JEZERO.lat + ROUTE_GOAL.lat) / 2, lon: (JEZERO.lon + ROUTE_GOAL.lon) / 2 }
         const walk = { rotY: facingLongitude(middle.lon), rotX: (middle.lat * Math.PI) / 180, scale: desktop ? 2.15 : 1.7, x: desktop ? 1.05 : 0, y: desktop ? 0 : -1.2, routes: 1 }
-        const aside = { x: desktop ? -1.75 : 0, y: desktop ? 0.1 : -1.3, scale: desktop ? 1.2 : 0.9, routes: 0, marker: 0, spin: 1, rotX: 0.2, rings: 1 }
+        const aside = { x: desktop ? -1.75 : 0, y: desktop ? 0.1 : -1.3, scale: desktop ? 1.2 : 0.9, spin: 1, rotX: 0.2, rings: 1 }
         const finale = { x: horizon.x, y: horizon.y, scale: horizon.scale, rotX: horizon.rotX, rings: 1 }
 
         gsap.set(s, horizon)
@@ -139,6 +139,8 @@ export default function Landing() {
           .to(s, { duration: 0.14 })
 
         gsap.to(s, { ...aside, ease: 'none', immediateRender: false, scrollTrigger: { trigger: '#data', start: 'top bottom', end: 'top 25%', scrub: 0.8 } })
+        // Leaving step 3: the routes and the two points go away at once.
+        gsap.to(s, { routes: 0, marker: 0, ease: 'none', immediateRender: false, scrollTrigger: { trigger: '#data', start: 'top bottom', end: 'top 78%', scrub: 0.3 } })
         gsap.to(s, { ...finale, ease: 'none', immediateRender: false, scrollTrigger: { trigger: '#about', start: 'top bottom', end: 'bottom bottom', scrub: 0.8 } })
 
         // Blocks rise into place when they enter the screen.
@@ -278,7 +280,7 @@ export default function Landing() {
                 Open the map
                 <ArrowRight size={18} aria-hidden />
               </Button>
-              <Button asChild size="lg" variant="outline" borderRadius="full" borderColor="whiteAlpha.400" color="white" bg="blackAlpha.400" _hover={{ bg: 'whiteAlpha.200' }}>
+              <Button asChild size="lg" variant="outline" borderRadius="full" borderColor="whiteAlpha.500" color="white" bg="rgba(12,16,28,0.88)" backdropFilter="blur(10px)" _hover={{ bg: 'rgba(40,46,66,0.95)' }}>
                 <a href="#mission">
                   See the idea
                   <ArrowDown size={18} aria-hidden />
