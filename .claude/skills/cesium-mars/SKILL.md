@@ -122,7 +122,7 @@ Perseverance path (ArcGIS feature service): `https://trek.nasa.gov/mars/trekarcg
   `CesiumTerrainProvider.fromUrl`.** Trek's tile headers carry bounding spheres computed for another
   planet shape (about 12 km and 2 km of height off). Cesium then culls visible tiles, which made
   holes and "cut" strips. `createTrekTerrain()` rebuilds each sphere from the tile's OBB.
-- Camera limits live in `MarsViewer.tsx`: at least 300 m above the ground, pitch at most −5°,
+- Camera limits live in `MarsViewer.tsx`: at least 25 m above the ground, pitch at most +15°,
   zoom out at most 25,000 km, 2D zoom between 1 km across and the whole map.
 - ⚠️ Its heights use a different zero (+5,639 m at the landing site against about −2,570 m real).
   Never show Trek terrain heights as numbers. ⚠️ M3: check the relief is not vertically stretched

@@ -8,12 +8,14 @@ import { addImageryLayers } from './imagery'
 
 export type ViewMode = '2D' | '2.5D' | '3D'
 
-/** The camera always stays at least this high above the 3D ground. */
-const MIN_CAMERA_ABOVE_GROUND_M = 300
+/** The camera always stays at least this high above the 3D ground (about a 8-storey building). */
+const MIN_CAMERA_ABOVE_GROUND_M = 25
 /** Furthest zoom out: about 7 Mars radii, the whole planet with space around it. */
 const MAX_CAMERA_DISTANCE_M = 25_000_000
-/** Steepest upward tilt allowed: 5° below the horizon. */
-const MAX_PITCH_RAD = Cesium.Math.toRadians(-5)
+/** Steepest upward tilt allowed: 15° above the horizon, like looking up at a crater rim. */
+const MAX_PITCH_RAD = Cesium.Math.toRadians(15)
+/** Below this height above the ground the sky turns from space to Mars sky. */
+const MARS_SKY_BELOW_M = 60_000
 /** 2.5D: the fixed tilt (keeps the far map edge out of view). */
 const PITCH_CV_RAD = Cesium.Math.toRadians(-50)
 /** 2.5D: highest camera, so the flat map always fills the screen. */
@@ -76,9 +78,10 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     scene.maximumRenderTimeChange = Infinity
     scene.backgroundColor = Cesium.Color.TRANSPARENT
 
-    // Stars only in 3D. In 2D and 2.5D the flat map floats on the page gradient.
+    // Stars only in 3D and only from space. In 2D and 2.5D the flat map floats on the page gradient.
+    const skyHostIsSpace = () => containerRef.current?.parentElement?.getAttribute('data-sky') !== 'mars'
     const updateSky = () => {
-      if (scene.skyBox) scene.skyBox.show = scene.mode === Cesium.SceneMode.SCENE3D
+      if (scene.skyBox) scene.skyBox.show = scene.mode === Cesium.SceneMode.SCENE3D && skyHostIsSpace()
       if (scene.sun) scene.sun.show = false
       if (scene.moon) scene.moon.show = false
     }
@@ -250,6 +253,25 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     })
 
     // Longitude and latitude under the mouse.
+    // Sky: near the ground the page behind the transparent canvas shows a Mars sky, in space
+    // it shows space. Set as a data attribute, the colours live in index.css.
+    const skyHost = containerRef.current.parentElement
+    const updateSkyTone = () => {
+      if (!skyHost || scene.mode !== Cesium.SceneMode.SCENE3D) {
+        skyHost?.setAttribute('data-sky', 'space')
+        return
+      }
+      const carto = viewer.camera.positionCartographic
+      const ground = scene.globe.getHeight(carto) ?? 5_600
+      skyHost.setAttribute('data-sky', carto.height - ground < MARS_SKY_BELOW_M ? 'mars' : 'space')
+    }
+    viewer.camera.changed.addEventListener(() => {
+      updateSkyTone()
+      updateSky()
+    })
+    scene.morphComplete.addEventListener(updateSkyTone)
+    updateSkyTone()
+
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas)
     handler.setInputAction((move: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
       // Pick the 3D ground first. The smooth sphere is wrong when the view is tilted,
@@ -328,8 +350,8 @@ export function flyToJezero(viewer: Cesium.Viewer, duration = 4) {
     orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
   }
   const descent = {
-    destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.11, ground + 4_500, MARS_ELLIPSOID),
-    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-22), roll: 0 },
+    destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.045, ground + 1_500, MARS_ELLIPSOID),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-14), roll: 0 },
   }
   camera.flyTo({
     ...overview,

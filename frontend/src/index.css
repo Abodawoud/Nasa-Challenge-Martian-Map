@@ -29,6 +29,15 @@ body {
     linear-gradient(180deg, #0b1630 0%, #070c1c 55%, #05070f 100%);
 }
 
+/* Near the ground (3D): a Mars daytime sky, dusty butterscotch, paler at the horizon.
+   Real Mars sky colour from rover images: tan to light brown, blue only around the sun at sunset. */
+.mars-space[data-sky='mars'] {
+  background: linear-gradient(180deg, #8f6b52 0%, #b88d6c 45%, #d9b48f 75%, #e8c9a6 100%);
+}
+.mars-space {
+  transition: background 600ms ease;
+}
+
 /* Hide Cesium's default credit bar. Credits are shown in our own footer. */
 .cesium-viewer-bottom {
   display: none !important;
