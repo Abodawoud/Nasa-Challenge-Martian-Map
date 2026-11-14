@@ -11,8 +11,15 @@
  */
 export type GreyLevels = [low: number, high: number]
 
-/** The Mars colour the photos are tinted with (middle of the Viking colours around Jezero). */
-const MARS_TINT = '#9c6b56'
+/**
+ * The colour of the brightest Mars ground. The photo is MULTIPLIED by it, like looking through
+ * a tan filter: white becomes this tan, grey becomes brown, black stays black.
+ * Measured against the Viking colour mosaic around Jezero.
+ */
+const MARS_LIGHT = '#e9b28c'
+
+/** After stretching, grey values are lifted by this factor, so the multiply does not look dark. */
+const LIFT = 1.25
 
 /**
  * Return the tile recoloured. Transparent (no-data) pixels stay transparent.
@@ -25,8 +32,11 @@ const MARS_TINT = '#9c6b56'
  * orientation). Only a plain <img> source returns a canvas.
  *
  * Fast path: only canvas filters and blend modes, no per-pixel JavaScript.
- * 1. grayscale + brightness + contrast bring the source's grey range to a common range.
- * 2. The "color" blend mode keeps each pixel's brightness and takes the Mars hue and saturation.
+ * 1. grayscale + brightness + contrast bring the source's grey range to a common range,
+ *    then a small lift.
+ * 2. "multiply" with a light Mars tan. An earlier version used the "color" blend, which keeps
+ *    each pixel's brightness: very bright sunlit slopes could not hold any colour and turned
+ *    white. With multiply, the brightest possible result is the tan itself, never white.
  * 3. "destination-in" puts back the original transparency.
  */
 export function tintToMars(
@@ -42,15 +52,15 @@ export function tintToMars(
   const [low, high] = levels
   const middle = (low + high) / 2 / 255
   const brightness = 0.5 / middle
-  // Bring the source to about half of the full range. Never reduce contrast: a source that
-  // already uses a wide range (the aligned Jezero mosaic) keeps all its sharpness.
-  const contrast = Math.max(1, 0.5 / Math.max(0.01, ((high - low) / 255) * brightness))
-  ctx.filter = `grayscale(1) brightness(${brightness.toFixed(3)}) contrast(${contrast.toFixed(3)})`
+  // Bring the source's main grey range to about 60% of the full range, centred. Never reduce
+  // contrast: a source that already uses a wide range keeps all its sharpness.
+  const contrast = Math.max(1, 0.6 / Math.max(0.01, ((high - low) / 255) * brightness))
+  ctx.filter = `grayscale(1) brightness(${brightness.toFixed(3)}) contrast(${contrast.toFixed(3)}) brightness(${LIFT})`
   ctx.drawImage(image, 0, 0)
   ctx.filter = 'none'
 
-  ctx.globalCompositeOperation = 'color'
-  ctx.fillStyle = MARS_TINT
+  ctx.globalCompositeOperation = 'multiply'
+  ctx.fillStyle = MARS_LIGHT
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
   ctx.globalCompositeOperation = 'destination-in'

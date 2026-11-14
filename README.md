@@ -131,6 +131,7 @@ These are worth knowing if you change the map code. Details are in `PLAN.md` (se
 | Holes and cut strips in the 3D ground | Trek's terrain tiles carry position boxes made for another planet shape | Each tile's box is rebuilt for our Mars sphere (`trekTerrain.ts`) |
 | Craters cut in half, horizontal bands | Tinted tiles were drawn upside down inside their own square | The tint returns tiles in the same form Cesium loads them (`tint.ts`) |
 | Patchy colours | Several photo mosaics stacked at the same zoom | One seamless source per zoom range |
+| Sunlit slopes turned white | The tint kept each pixel's brightness, and very bright pixels can't hold colour | The photo is multiplied by a light Mars tan, like a colour filter: the brightest result is tan, never white (`tint.ts`) |
 | Dragging in 3D moved the wrong way | Cesium's drag grabs the smooth sphere, 5.6 km below Trek's ground | Own controls near the ground (`groundControls.ts`) |
 | Map stopped drawing ("not a number" error) | A tilt correction every frame in 2.5D | Fixed tilt in 2.5D, safe camera rules, and an error safety net |
 | Camera went through the ground in 2.5D | Cesium's ground check does not work there with this terrain | Own 25 m ground floor |
