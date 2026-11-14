@@ -103,6 +103,90 @@ function glowTexture(): THREE.Texture {
   return new THREE.CanvasTexture(canvas)
 }
 
+/**
+ * One rock shape: a ball pushed in and out by a few waves, so it gets lumps, flat sides and
+ * edges. The push depends only on the direction of each point, so the surface stays closed.
+ * The faces are left flat (not smoothed), which is what makes it read as broken stone.
+ */
+function rockGeometry(seed: number): THREE.BufferGeometry {
+  const geometry = new THREE.IcosahedronGeometry(1, 3)
+  const position = geometry.attributes.position
+  const v = new THREE.Vector3()
+  const k = (n: number) => 1.3 + Math.abs(Math.sin(seed * 12.9898 + n * 78.233)) * 2.2
+  for (let i = 0; i < position.count; i++) {
+    v.fromBufferAttribute(position, i).normalize()
+    const big = Math.sin(v.x * k(1) + seed) * Math.sin(v.y * k(2) + seed * 2) * Math.sin(v.z * k(3) + seed * 3)
+    const mid = Math.sin(v.x * k(4) * 2.3 + v.y * 1.7 + seed) * Math.sin(v.z * k(5) * 2.1 - v.x * 1.3)
+    const small = Math.sin(v.x * 11 + seed) * Math.sin(v.y * 13 + seed) * Math.sin(v.z * 12 + seed)
+    // Rounding the push to steps makes flat faces with sharp edges between them.
+    const push = 0.34 * big + 0.16 * mid + 0.05 * small
+    v.multiplyScalar(1 + Math.round(push * 9) / 9)
+    position.setXYZ(i, v.x, v.y, v.z)
+  }
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+/**
+ * The rock surface, painted on a canvas: `color` is the red-brown stone with darker and
+ * lighter grains, `bump` is the same grains in grey, used to make the surface look rough.
+ * It is a drawing of Mars-like stone, not a photo of a real rock.
+ */
+function rockTextures(): { color: THREE.Texture; bump: THREE.Texture } {
+  const SIZE = 256
+  const make = () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = SIZE
+    return { canvas, ctx: canvas.getContext('2d')! }
+  }
+  const color = make()
+  const bump = make()
+  color.ctx.fillStyle = '#8f2f1c'
+  color.ctx.fillRect(0, 0, SIZE, SIZE)
+  bump.ctx.fillStyle = '#808080'
+  bump.ctx.fillRect(0, 0, SIZE, SIZE)
+  const blob = (ctx: CanvasRenderingContext2D, x: number, y: number, r: number, squash: number, angle: number, fill: string) => {
+    ctx.fillStyle = fill
+    ctx.beginPath()
+    ctx.ellipse(x, y, r, r * squash, angle, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  // Large soft patches, then grains, then small pits.
+  for (let i = 0; i < 2600; i++) {
+    const x = Math.random() * SIZE
+    const y = Math.random() * SIZE
+    const r = i < 60 ? 14 + Math.random() * 26 : i < 700 ? 2 + Math.random() * 6 : 0.5 + Math.random() * 1.6
+    const squash = 0.5 + Math.random() * 0.6
+    const angle = Math.random() * Math.PI
+    const dark = Math.random() < 0.55
+    const alpha = i < 60 ? 0.16 : 0.3 + Math.random() * 0.35
+    blob(color.ctx, x, y, r, squash, angle, dark ? `rgba(48,10,6,${alpha})` : `rgba(226,104,62,${alpha})`)
+    blob(bump.ctx, x, y, r, squash, angle, dark ? `rgba(0,0,0,${alpha})` : `rgba(255,255,255,${alpha})`)
+  }
+  // A few thin cracks.
+  color.ctx.strokeStyle = 'rgba(30,6,4,0.7)'
+  bump.ctx.strokeStyle = 'rgba(0,0,0,0.8)'
+  for (let i = 0; i < 14; i++) {
+    let x = Math.random() * SIZE
+    let y = Math.random() * SIZE
+    const steps: Array<[number, number]> = [[x, y]]
+    for (let j = 0; j < 9; j++) steps.push([(x += (Math.random() - 0.5) * 34), (y += (Math.random() - 0.5) * 34)])
+    for (const ctx of [color.ctx, bump.ctx]) {
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      steps.forEach(([px, py], n) => (n ? ctx.lineTo(px, py) : ctx.moveTo(px, py)))
+      ctx.stroke()
+    }
+  }
+  const texture = (canvas: HTMLCanvasElement, srgb: boolean) => {
+    const t = new THREE.CanvasTexture(canvas)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }
+  return { color: texture(color.canvas, true), bump: texture(bump.canvas, false) }
+}
+
 /** A small text label that always faces the viewer (START, GOAL). */
 function labelSprite(text: string, background: string, color: string): THREE.Sprite {
   const canvas = document.createElement('canvas')
@@ -169,35 +253,79 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
   const smallStars = starField(3200, 0.5, 0.75)
   const brightStars = starField(160, 1.5, 0.95)
 
-  // Floating red rocks: glowing shards drifting in front of and around the planet.
+  // Floating red rocks: real stone shapes with a rough red-brown surface, lit by the sun,
+  // each one tumbling slowly. Four different shapes are shared by all the rocks.
   const ROCKS = 150
+  const BIG_ROCKS = 12
+  const SHAPES = 4
   const rocks = new THREE.Group()
   scene.add(rocks)
-  const rockMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: EMBER }), ROCKS)
+  const stone = rockTextures()
+  const rockMaterial = new THREE.MeshStandardMaterial({
+    map: stone.color,
+    bumpMap: stone.bump,
+    bumpScale: 2.2,
+    roughness: 0.92,
+    metalness: 0.04,
+    // A little warm light of their own, so the side away from the sun is dark red, not black.
+    emissive: 0x4a0d06,
+    emissiveIntensity: 0.55,
+  })
+  const rockMeshes = Array.from({ length: SHAPES }, (_, shape) => {
+    const mesh = new THREE.InstancedMesh(rockGeometry(shape * 7.31 + 1.7), rockMaterial, Math.ceil(ROCKS / SHAPES))
+    mesh.count = 0
+    rocks.add(mesh)
+    return mesh
+  })
+  // What is needed to turn each rock again every frame.
+  const rockItems: Array<{ mesh: THREE.InstancedMesh; index: number; position: THREE.Vector3; scale: THREE.Vector3; turn: THREE.Vector3; speed: THREE.Vector3 }> = []
   const haloPositions = new Float32Array(ROCKS * 3)
   const dummy = new THREE.Object3D()
+  const tint = new THREE.Color()
   for (let i = 0; i < ROCKS; i++) {
-    const x = (Math.random() * 2 - 1) * 5.4
-    const y = (Math.random() * 2 - 1) * 2.6 + 0.2
-    const z = (Math.random() * 2 - 1) * 2.4
+    const big = i < BIG_ROCKS
+    // The big rocks stay at the sides and near the viewer, where their surface can be seen
+    // and they do not cover the text.
+    const side = Math.random() < 0.5 ? -1 : 1
+    const x = big ? side * (2.1 + Math.random() * 2.6) : (Math.random() * 2 - 1) * 5.4
+    const y = (Math.random() * 2 - 1) * (big ? 2.0 : 2.6) + 0.2
+    const z = big ? 0.4 + Math.random() * 2.2 : (Math.random() * 2 - 1) * 2.4
     // Most rocks are tiny, a few are larger.
-    const size = 0.006 + Math.random() ** 3 * 0.034
-    dummy.position.set(x, y, z)
-    dummy.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6)
-    // Stretched and flattened by a random amount, so no two look the same.
-    dummy.scale.set(size * (0.7 + Math.random() * 1.6), size * (0.35 + Math.random() * 0.7), size * (0.5 + Math.random()))
-    dummy.updateMatrix()
-    rockMesh.setMatrixAt(i, dummy.matrix)
+    const size = big ? 0.05 + Math.random() * 0.07 : 0.008 + Math.random() ** 3 * 0.04
+    const mesh = rockMeshes[i % SHAPES]
+    const item = {
+      mesh,
+      index: mesh.count++,
+      position: new THREE.Vector3(x, y, z),
+      // Stretched and flattened by a random amount, so no two look the same.
+      scale: new THREE.Vector3(size * (0.8 + Math.random() * 0.9), size * (0.55 + Math.random() * 0.6), size * (0.7 + Math.random() * 0.7)),
+      turn: new THREE.Vector3(Math.random() * 6, Math.random() * 6, Math.random() * 6),
+      speed: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(big ? 0.35 : 0.9),
+    }
+    rockItems.push(item)
+    // From dark rust to a brighter red.
+    mesh.setColorAt(item.index, tint.setHSL(0.02 + Math.random() * 0.035, 0.75, 0.5 + Math.random() * 0.4))
     haloPositions.set([x, y, z], i * 3)
   }
-  rockMesh.instanceMatrix.needsUpdate = true
-  rocks.add(rockMesh)
+  const turnRocks = (time: number) => {
+    for (const item of rockItems) {
+      dummy.position.copy(item.position)
+      dummy.scale.copy(item.scale)
+      dummy.rotation.set(item.turn.x + item.speed.x * time, item.turn.y + item.speed.y * time, item.turn.z + item.speed.z * time)
+      dummy.updateMatrix()
+      item.mesh.setMatrixAt(item.index, dummy.matrix)
+    }
+    for (const mesh of rockMeshes) mesh.instanceMatrix.needsUpdate = true
+  }
+  turnRocks(0)
+  for (const mesh of rockMeshes) if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  // A faint red haze around each rock ties them to the red of the logo.
   const haloGeometry = new THREE.BufferGeometry()
   haloGeometry.setAttribute('position', new THREE.BufferAttribute(haloPositions, 3))
   rocks.add(
     new THREE.Points(
       haloGeometry,
-      new THREE.PointsMaterial({ color: EMBER, map: glow, size: 0.22, sizeAttenuation: true, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }),
+      new THREE.PointsMaterial({ color: EMBER, map: glow, size: 0.2, sizeAttenuation: true, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending }),
     ),
   )
 
@@ -343,6 +471,7 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
     rocks.rotation.y = Math.sin(time * 0.05) * 0.12
     rocks.rotation.z = time * 0.006
     rocks.position.y = Math.sin(time * 0.2) * 0.04
+    turnRocks(time)
 
     const beat = (time * 0.8) % 1
     const showPin = (item: typeof start, amount: number) => {
@@ -393,6 +522,7 @@ export function createMarsScene(canvas: HTMLCanvasElement, textures: Array<Promi
           material.dispose()
         }
       })
+      stone.bump.dispose()
       glow.dispose()
       renderer.dispose()
     },

@@ -12,6 +12,7 @@ import { Badge, Box, Button, Container, Flex, Heading, HStack, IconButton, Link,
 import { ArrowDown, ArrowRight, Camera, Globe, Layers, Layers2, MapPin, Menu, Mountain, MoveDown, Route, Satellite, X } from 'lucide-react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import Lenis from 'lenis'
 import { JEZERO, ROUTE_GOAL, createMarsScene, facingLongitude, loadMarsTexture } from './MarsScene'
 import type { SceneState } from './MarsScene'
 import { CompassStar, LOGO_NAVY, LOGO_RED } from '../ui/CompassStar'
@@ -104,13 +105,21 @@ export default function Landing() {
         gsap.set(s, horizon)
         if (reduce) return // no scroll animation: the planet stays as on the first screen
 
+        // Smooth scrolling: the page glides to where the wheel sent it, and the planet follows
+        // a little behind (the scrub values below). Menu links glide to their section too.
+        const lenis = new Lenis({ lerp: 0.09, anchors: true })
+        lenis.on('scroll', ScrollTrigger.update)
+        const tick = (time: number) => lenis.raf(time * 1000)
+        gsap.ticker.add(tick)
+        gsap.ticker.lagSmoothing(0)
+
         // The title arrives line by line.
         // fromTo with the end written out: the launch button has its own CSS transition, and
         // with a plain from() GSAP read "invisible" as its end value and left it hidden.
         gsap.fromTo('[data-hero] > *', { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 1, stagger: 0.1, ease: 'power3.out', delay: 0.15 })
 
         // First screen -> the planet becomes a whole globe beside the text.
-        gsap.to(s, { ...whole, ease: 'none', immediateRender: false, scrollTrigger: { trigger: '#mission', start: 'top bottom', end: 'top top', scrub: true } })
+        gsap.to(s, { ...whole, ease: 'none', immediateRender: false, scrollTrigger: { trigger: '#mission', start: 'top bottom', end: 'top top', scrub: 0.8 } })
 
         // The pinned story: the planet turns to Jezero, then two points and two routes appear.
         const story = gsap.timeline({
@@ -118,7 +127,7 @@ export default function Landing() {
             trigger: '#mission',
             start: 'top top',
             end: 'bottom bottom',
-            scrub: true,
+            scrub: 0.8,
             onUpdate: (self) => setStep(self.progress < 0.28 ? 0 : self.progress < 0.62 ? 1 : 2),
           },
         })
@@ -129,12 +138,17 @@ export default function Landing() {
           .to(s, { ...walk, duration: 0.3, ease: 'power2.inOut' })
           .to(s, { duration: 0.14 })
 
-        gsap.to(s, { ...aside, ease: 'none', immediateRender: false, scrollTrigger: { trigger: '#data', start: 'top bottom', end: 'top 25%', scrub: true } })
-        gsap.to(s, { ...finale, ease: 'none', immediateRender: false, scrollTrigger: { trigger: '#about', start: 'top bottom', end: 'bottom bottom', scrub: true } })
+        gsap.to(s, { ...aside, ease: 'none', immediateRender: false, scrollTrigger: { trigger: '#data', start: 'top bottom', end: 'top 25%', scrub: 0.8 } })
+        gsap.to(s, { ...finale, ease: 'none', immediateRender: false, scrollTrigger: { trigger: '#about', start: 'top bottom', end: 'bottom bottom', scrub: 0.8 } })
 
         // Blocks rise into place when they enter the screen.
         for (const element of gsap.utils.toArray<HTMLElement>('[data-reveal]')) {
           gsap.from(element, { y: 44, opacity: 0, duration: 0.8, ease: 'power3.out', scrollTrigger: { trigger: element, start: 'top 88%' } })
+        }
+
+        return () => {
+          gsap.ticker.remove(tick)
+          lenis.destroy()
         }
       },
     )
@@ -167,7 +181,7 @@ export default function Landing() {
         inset="0"
         zIndex="0"
         pointerEvents="none"
-        backgroundImage="linear-gradient(180deg, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.28) 34%, rgba(0,0,0,0.42) 62%, rgba(0,0,0,0.78) 100%), radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(0,0,0,0.6) 100%)"
+        backgroundImage="linear-gradient(180deg, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.16) 34%, rgba(0,0,0,0.28) 62%, rgba(0,0,0,0.62) 100%), radial-gradient(120% 90% at 50% 45%, transparent 60%, rgba(0,0,0,0.45) 100%)"
       />
 
       {/* Shooting stars (CSS, see index.css). */}
