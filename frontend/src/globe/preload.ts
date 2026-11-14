@@ -143,7 +143,12 @@ function planTerrain(viewer: Cesium.Viewer, view: CameraView, groundHeight: numb
 }
 
 /** Terrain and imagery downloads for a view, nearest first, at most MAX_TILES_PER_VIEW. */
-function planView(viewer: Cesium.Viewer, view: CameraView, groundHeight: number): { jobs: Job[]; wanted: number } {
+function planView(
+  viewer: Cesium.Viewer,
+  view: CameraView,
+  groundHeight: number,
+  maxTiles = MAX_TILES_PER_VIEW,
+): { jobs: Job[]; wanted: number } {
   const { scene } = viewer
   const terrain = scene.terrainProvider
   const tiling = terrain.tilingScheme
@@ -163,7 +168,7 @@ function planView(viewer: Cesium.Viewer, view: CameraView, groundHeight: number)
   const add = (key: string, load: Job['load']) => {
     if (seen.has(key)) return
     seen.add(key)
-    if (jobs.length < MAX_TILES_PER_VIEW) jobs.push({ key, load })
+    if (jobs.length < maxTiles) jobs.push({ key, load })
   }
 
   for (const tile of planTerrain(viewer, view, groundHeight)) {
@@ -250,10 +255,17 @@ function schedule(job: Job): Promise<void> {
  * them are done or failed (never rejects). Safe to call many times: tiles are fetched once.
  * groundHeight: Trek ground height at the destination (about 5,600 m at Jezero).
  */
-export function preloadView(viewer: Cesium.Viewer, view: CameraView, groundHeight: number, name = 'view'): Promise<void> {
+export function preloadView(
+  viewer: Cesium.Viewer,
+  view: CameraView,
+  groundHeight: number,
+  name = 'view',
+  /** Fewer tiles for a view that is only a guess (for example: where the user may turn next). */
+  maxTiles?: number,
+): Promise<void> {
   try {
     if (viewer.isDestroyed()) return Promise.resolve()
-    const { jobs, wanted } = planView(viewer, view, groundHeight)
+    const { jobs, wanted } = planView(viewer, view, groundHeight, maxTiles)
     if (import.meta.env.DEV) console.info(`[preload] ${name}: ${jobs.length} of ${wanted} visible tiles, nearest first`)
     return Promise.all(jobs.map(schedule)).then(() => undefined)
   } catch (err) {

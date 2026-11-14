@@ -12,12 +12,42 @@ import type { CameraView } from './preload'
 /** 2D is a flat map, 3D the real planet. A 2.5D mode was dropped (PLAN.md D15). */
 export type ViewMode = '2D' | '3D'
 
+/** Look-around preload: the three other directions (right, left, behind), in radians. */
+const AROUND_TURNS = [Math.PI / 2, -Math.PI / 2, Math.PI]
+/** Only near the ground, where turning shows new ground. */
+const AROUND_BELOW_M = 100_000
+/** Nearest tiles of each direction. Enough for the lower half of the screen. */
+const AROUND_TILES = 200
+const AROUND_DELAY_MS = 500
+const AROUND_MAX_PITCH = Cesium.Math.toRadians(-8)
+
 /** Tile detail (Cesium's maximumScreenSpaceError: lower is sharper and loads more tiles). */
 const DETAIL_STILL = 1.3
 const DETAIL_MOVING = 2
 
 /** The camera always stays at least this high above the 3D ground (about a 8-storey building). */
 const MIN_CAMERA_ABOVE_GROUND_M = 25
+/**
+ * Lowest camera height where only CTX photos exist (about 6 m per pixel). Below this, one
+ * photo pixel covers a large part of the screen and the ground looks like smooth blur.
+ * Inside the HiRISE mosaic (25 cm per pixel) the camera may go down to MIN_CAMERA_ABOVE_GROUND_M.
+ */
+const MIN_CAMERA_ABOVE_GROUND_CTX_M = 250
+/** The lowest height changes smoothly over this distance at the edge of the HiRISE area (degrees, about 600 m). */
+const HIRISE_EDGE_DEG = 0.01
+
+/** Lowest allowed camera height above the ground at a place: it depends on the photo detail there. */
+function minHeightAboveGround(carto: Cesium.Cartographic): number {
+  const hirise = IMAGERY_LAYERS.find((layer) => layer.id === 'hirise-jezero')
+  if (!hirise?.bounds || !hirise.visible) return MIN_CAMERA_ABOVE_GROUND_CTX_M
+  const [west, south, east, north] = hirise.bounds
+  const lon = Cesium.Math.toDegrees(carto.longitude)
+  const lat = Cesium.Math.toDegrees(carto.latitude)
+  // How far inside the HiRISE area the camera is: 0 at the edge or outside, 1 well inside.
+  const inside = Math.min(lon - west, east - lon, lat - south, north - lat)
+  const t = Math.min(1, Math.max(0, inside / HIRISE_EDGE_DEG))
+  return MIN_CAMERA_ABOVE_GROUND_CTX_M + (MIN_CAMERA_ABOVE_GROUND_M - MIN_CAMERA_ABOVE_GROUND_CTX_M) * t
+}
 /** Furthest zoom out: about 7 Mars radii, the whole planet with space around it. */
 const MAX_CAMERA_DISTANCE_M = 25_000_000
 /** Steepest upward tilt allowed: 15° above the horizon, like looking up at a crater rim. */
@@ -120,9 +150,10 @@ export function getZoomState(viewer: Cesium.Viewer): ZoomState {
   const toTarget = hit ? Cesium.Cartesian3.distance(camera.positionWC, hit) : Infinity
   // Room to zoom in = distance along the view until the camera reaches the height floor
   // (or the ground point it looks at, whichever comes first).
-  const heightLeft = aboveGround - MIN_CAMERA_ABOVE_GROUND_M
+  const minHeight = minHeightAboveGround(carto)
+  const heightLeft = aboveGround - minHeight
   const down = Math.max(0.05, Math.sin(-camera.pitch) || 0.05)
-  const roomIn = Math.max(0, Math.min(toTarget - MIN_CAMERA_ABOVE_GROUND_M, heightLeft / down))
+  const roomIn = Math.max(0, Math.min(toTarget - minHeight, heightLeft / down))
   const roomOut = Math.max(0, MAX_CAMERA_DISTANCE_M - carto.height)
   return {
     canZoomIn: heightLeft > 2 && roomIn > 2,
@@ -200,6 +231,39 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     viewer.camera.moveEnd.addEventListener(() => {
       scene.globe.maximumScreenSpaceError = DETAIL_STILL
       scene.requestRender()
+      preloadAround()
+    })
+
+    // Look-around preload: when the camera rests near the ground, download the tiles for the
+    // views to the left, to the right and behind (the nearest ones only). Turning then finds
+    // them in the tile cache instead of waiting for the network. One view at a time, each a
+    // moment after the other, and dropped if the camera moves again first.
+    let aroundRun = 0
+    const preloadAround = () => {
+      const run = ++aroundRun
+      if (scene.mode !== Cesium.SceneMode.SCENE3D) return
+      AROUND_TURNS.forEach((turn, i) => {
+        setTimeout(() => {
+          try {
+            if (run !== aroundRun || viewer.isDestroyed() || scene.mode !== Cesium.SceneMode.SCENE3D) return
+            const camera = viewer.camera
+            const carto = camera.positionCartographic
+            const ground = scene.globe.getHeight(carto) ?? lastGroundHeight
+            if (carto.height - ground > AROUND_BELOW_M) return
+            const view: CameraView = {
+              destination: camera.positionWC.clone(),
+              // Look down a little at least, so the view has ground in it.
+              orientation: { heading: camera.heading + turn, pitch: Math.min(camera.pitch, AROUND_MAX_PITCH), roll: 0 },
+            }
+            void preloadView(viewer, view, ground, 'around', AROUND_TILES)
+          } catch (err) {
+            console.warn('[MarsViewer] look-around preload skipped', err)
+          }
+        }, AROUND_DELAY_MS * (i + 1))
+      })
+    }
+    viewer.camera.moveStart.addEventListener(() => {
+      aroundRun++ // moving again: forget the pending look-around
     })
     // Only draw a new frame when something changes (saves work when the map is still).
     scene.requestRenderMode = true
@@ -224,8 +288,16 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
       const halfW = (f.right - f.left) / 2
       const halfH = (f.top - f.bottom) / 2
       const p = viewer.camera.position
-      const limit = (value: number, half: number, world: number) =>
-        half >= world ? 0 : Math.min(world - half, Math.max(-world + half, value))
+      // At the widest zoom the whole map is on screen and must not slide at all. The map never
+      // has exactly the screen's shape, so one direction always has a little room left (on a
+      // wide screen: a few hundred km up and down). That room is closed smoothly over the
+      // last 15% of zooming out, so the map settles in the centre without a jump.
+      const maxWidth = maxWidth2D(scene)
+      const room = Math.min(1, Math.max(0, (maxWidth - 2 * halfW) / (0.15 * maxWidth)))
+      const limit = (value: number, half: number, world: number) => {
+        const range = Math.max(0, world - half) * room
+        return Math.min(range, Math.max(-range, value))
+      }
       p.x = limit(p.x, halfW, HALF_WORLD_X)
       p.y = limit(p.y, halfH, HALF_WORLD_Y)
     }
@@ -271,12 +343,13 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
       const carto = camera.positionCartographic
       if (!carto || !Number.isFinite(carto.height)) return
       const ground = scene.globe.getHeight(carto)
-      if (ground !== undefined && carto.height < ground + MIN_CAMERA_ABOVE_GROUND_M) {
+      const minHeight = minHeightAboveGround(carto)
+      if (ground !== undefined && carto.height < ground + minHeight) {
         camera.setView({
           destination: Cesium.Cartesian3.fromRadians(
             carto.longitude,
             carto.latitude,
-            ground + MIN_CAMERA_ABOVE_GROUND_M,
+            ground + minHeight,
             MARS_ELLIPSOID,
           ),
           orientation: { heading, pitch: camera.pitch, roll: 0 },

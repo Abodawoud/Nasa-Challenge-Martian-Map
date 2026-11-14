@@ -9,6 +9,14 @@ import { system } from './theme'
 import './index.css'
 import App from './App'
 
+// A permanent cache for map tiles (see public/tile-cache-sw.js). The map works without it,
+// so a browser that refuses service workers only loses the speed-up.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/tile-cache-sw.js').catch((err) => {
+    console.warn('[tile cache] not available', err)
+  })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ChakraProvider value={system}>

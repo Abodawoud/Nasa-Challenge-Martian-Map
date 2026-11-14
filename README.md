@@ -57,8 +57,8 @@ A short reminder of these is shown in the bottom bar.
 
 | View | Closest | Furthest | Other |
 |---|---|---|---|
-| 3D | 25 m above the ground | 25,000 km | Tilt from straight down to 15° above the horizon |
-| 2D | 1 km across | The whole map | The map always fills the screen. Edges stop at the screen edge |
+| 3D | 25 m above the ground inside the HiRISE area (25 cm photos). 250 m elsewhere, where the best photos are 6 m per pixel and a closer view would only show blur | 25,000 km | Tilt from straight down to 15° above the horizon |
+| 2D | 1 km across | The whole map | The map always fills the screen. Edges stop at the screen edge. At the widest zoom the map does not slide at all |
 
 ---
 
@@ -157,6 +157,8 @@ The picture is the same. What changed:
 | Coarser tiles for far ground near the horizon | Far ground covers few pixels, it does not need fine tiles |
 | Lighter detail while the camera moves, full detail about half a second after it stops | Dragging keeps up with the mouse |
 | Tiles for a flight are downloaded before the camera arrives | No blurry arrival (`preload.ts`) |
+| **Permanent tile cache** in the browser (`public/tile-cache-sw.js`) | NASA's servers make the browser ask again for every tile on every visit. A tile is now stored after its first download and answered at once after that, also after a reload (up to 6,000 tiles) |
+| **Look-around preload** | When the camera rests near the ground, the nearest tiles to the left, right and behind are fetched, so turning does not wait for the network |
 
 ## Known limits
 

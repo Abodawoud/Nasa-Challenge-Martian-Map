@@ -186,6 +186,11 @@ requests with the Resource Timing API):
 - `globe.preloadSiblings = false`, `preloadAncestors = true`.
 - `scene.fog`: enabled, `renderable = false`, `screenSpaceErrorFactor = 4` (coarser far tiles, not drawn).
 - `maximumScreenSpaceError` 1.3 when still, 2 while the camera moves (`camera.moveStart` / `moveEnd`).
+- Tile cache: `public/tile-cache-sw.js` (service worker, cache-first for Trek, the terrain bucket
+  and Esri tiles). If tiles look stale after changing a layer, bump `CACHE` in that file.
+- Look-around preload on `camera.moveEnd` (3 directions x 200 nearest tiles, below 100 km).
+- Lowest camera height depends on photo detail: 25 m inside the HiRISE bounds, 250 m elsewhere
+  (`minHeightAboveGround`). Blurry ground far from the landing site is the data limit, not a bug.
 - `hiddenUnder` in `layers.config.ts`: tiles of a layer that lie fully under another layer are
   answered with an empty ImageBitmap (`createImageBitmap(new ImageData(1, 1))`), not downloaded.
   Never throw or return a canvas from `requestImage`: a throw leaves the tile loading forever.
