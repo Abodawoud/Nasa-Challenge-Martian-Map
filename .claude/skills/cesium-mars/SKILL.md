@@ -117,6 +117,12 @@ them (checked against the service's own GeoJSON output) and paints them as tiles
 own drawing rules. To test painted layers without a screenshot: read pixels with `gl.readPixels` inside
 `scene.postRender` (reading the canvas at any other moment gives black).
 
+**Radiation layer (2026-11-15):** NASA Trek has NO radiation layer. `radiation.ts` recolours the MOLA elevation
+tiles (`mola128_mola64_merge_90Nto90S_SimpleC_clon0`, png, grey, levels 0 to 5 only, the Hellas floor is stored
+as transparent black) with a blue-to-red ramp, following NASA's map PIA03480 (dose rises with ground height,
+about 10 to 20 rem per year). It is an ESTIMATE and must always be labelled so. Never print a dose number per
+place: the grey-to-height stretch of those tiles and the formula of the 2002 map are not published.
+
 **2D never turns:** in 2D `enableRotate` must stay off (it switches Cesium's twist gesture), `enableTranslate` on.
 
 Older, stops at sol 1176 (ArcGIS feature service, not used): `https://trek.nasa.gov/mars/trekarcgis/rest/services/Perseverance_Traverse_Path/MapServer/0`

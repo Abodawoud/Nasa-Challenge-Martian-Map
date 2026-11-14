@@ -5,6 +5,7 @@ import { TREK_TILE_ROOT } from './layers.config'
 import type { ImageryLayerConfig } from './layers.config'
 import { tintToMars } from './tint'
 import type { GreyLevels } from './tint'
+import { elevationToRadiation } from './radiation'
 
 type TileImage = CanvasImageSource & { width: number; height: number }
 
@@ -15,6 +16,17 @@ function withMarsTint<T extends Cesium.ImageryProvider>(provider: T, levels?: Gr
     const pending = original(x, y, level, request)
     if (!pending) return pending
     return Promise.resolve(pending).then((img) => tintToMars(img as TileImage, levels))
+  }) as typeof provider.requestImage
+  return provider
+}
+
+/** Recolour every tile of a grey elevation provider as the radiation estimate. */
+function withRadiationRamp<T extends Cesium.ImageryProvider>(provider: T): T {
+  const original = provider.requestImage.bind(provider)
+  provider.requestImage = ((x: number, y: number, level: number, request?: Cesium.Request) => {
+    const pending = original(x, y, level, request)
+    if (!pending) return pending
+    return Promise.resolve(pending).then((img) => elevationToRadiation(img as TileImage))
   }) as typeof provider.requestImage
   return provider
 }
@@ -113,6 +125,7 @@ export function addImageryLayers(viewer: Cesium.Viewer, layers: ImageryLayerConf
   for (const layer of layers) {
     let provider = createProvider(layer)
     if (layer.tintToMars) provider = withMarsTint(provider, layer.greyLevels)
+    if (layer.radiationRamp) provider = withRadiationRamp(provider)
     // Wrapped last, so a hidden tile is neither downloaded nor tinted.
     if (layer.hiddenUnder) provider = withHiddenTilesSkipped(provider, layer)
     const imagery = new Cesium.ImageryLayer(provider, {

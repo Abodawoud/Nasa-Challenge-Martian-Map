@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type * as Cesium from 'cesium'
 import { Badge, Box, Button, Flex, HStack, IconButton, SimpleGrid, Slider, Spinner, Switch, Text } from '@chakra-ui/react'
-import { Layers, X } from 'lucide-react'
+import { Layers, TriangleAlert, X } from 'lucide-react'
 import { PANEL_GROUPS, PANEL_LAYERS } from '../globe/layers.config'
 import type { LayerCategory, PanelLayer } from '../globe/layers.config'
 import { setLayerOpacity, setLayerVisible } from '../globe/layerControl'
@@ -15,6 +15,7 @@ const CATEGORY: Record<LayerCategory, { label: string; palette: string }> = {
   spectral: { label: 'Minerals', palette: 'purple' },
   vector: { label: 'Mission', palette: 'blue' },
   geology: { label: 'Geology', palette: 'teal' },
+  radiation: { label: 'Radiation', palette: 'red' },
 }
 
 interface RowState {
@@ -193,6 +194,27 @@ export function LayersPanel({ viewer }: { viewer: Cesium.Viewer | null }) {
                       <Text mt="2" fontSize="xs" color="gray.700">
                         {entry.legend}
                       </Text>
+                    )}
+
+                    {row.on && entry.legendScale && (
+                      <Box mt="2">
+                        <Box aria-hidden h="10px" borderRadius="full" borderWidth="1px" borderColor="blackAlpha.300" style={{ backgroundImage: entry.legendScale.css }} />
+                        <HStack justify="space-between" mt="1" fontSize="2xs" color="gray.700">
+                          <Text>{entry.legendScale.low}</Text>
+                          <Text>{entry.legendScale.high}</Text>
+                        </HStack>
+                      </Box>
+                    )}
+
+                    {row.on && entry.caution && (
+                      <HStack align="flex-start" gap="2" mt="2" p="2" borderRadius="md" bg="orange.50" borderWidth="1px" borderColor="orange.200">
+                        <Box flexShrink={0} mt="0.5" color="orange.700">
+                          <TriangleAlert size={14} aria-hidden />
+                        </Box>
+                        <Text fontSize="xs" color="orange.900">
+                          {entry.caution}
+                        </Text>
+                      </HStack>
                     )}
 
                     {row.on && entry.legendItems && (

@@ -1,3 +1,5 @@
+import { RADIATION_GRADIENT } from './radiation'
+
 // Every map layer is one entry here. The layer panel and the viewer are built from this list.
 // Layer ids, formats and zoom levels were read from the services' capabilities on 2026-11-14.
 // Order matters: later layers draw on top of earlier ones.
@@ -9,7 +11,7 @@
 // Stacking several mosaics at the same zoom made visible patches, because every mosaic has
 // its own brightness. The raw aligned CTX mosaic alone is seamless.
 
-export type LayerCategory = 'optical' | 'topographic' | 'thermal' | 'spectral' | 'vector' | 'geology'
+export type LayerCategory = 'optical' | 'topographic' | 'thermal' | 'spectral' | 'vector' | 'geology' | 'radiation'
 
 interface BaseImageryLayer {
   id: string
@@ -32,6 +34,8 @@ interface BaseImageryLayer {
   tintToMars?: boolean
   /** Grey range of this source, stretched before colouring (see tint.ts). */
   greyLevels?: [number, number]
+  /** Recolour a grey elevation layer as the radiation estimate (see radiation.ts). */
+  radiationRamp?: boolean
 }
 
 /** A NASA Mars Trek WMTS layer: https://trek.nasa.gov/tiles/Mars/EQ/<layerId>/1.0.0/WMTSCapabilities.xml */
@@ -165,6 +169,23 @@ export const IMAGERY_LAYERS: ImageryLayerConfig[] = [
     visible: false,
     source: 'NASA/JPL-Caltech/Arizona State University, Mars Trek',
   },
+  {
+    // The MOLA elevation map as grey tiles, recoloured as an ESTIMATE of cosmic radiation
+    // (radiation.ts explains the method and its limits). Checked 2026-11-15: png, levels 0
+    // to 5 only (level 6 answers 404), about 1.3 km per pixel. Coarse on purpose: the air
+    // above a place changes slowly, so the estimate does too.
+    kind: 'trek-wmts',
+    id: 'radiation-estimate',
+    title: 'Cosmic radiation, estimate from ground height',
+    category: 'radiation',
+    layerId: 'mola128_mola64_merge_90Nto90S_SimpleC_clon0',
+    ext: 'png',
+    maximumLevel: 5,
+    defaultOpacity: 0.6,
+    visible: false,
+    source: 'Elevation: NASA/GSFC MOLA, Mars Trek. Method: NASA/JPL/JSC (PIA03480)',
+    radiationRamp: true,
+  },
 ]
 
 /** How one kind of feature of the geologic map is drawn. Widths and sizes are tile pixels. */
@@ -216,6 +237,10 @@ interface PanelBase {
   /** How to read the layer, shown while it is on. */
   legend?: string
   legendItems?: LegendItem[]
+  /** A colour bar with a word at each end. `css` is a CSS gradient. */
+  legendScale?: { css: string; low: string; high: string }
+  /** Shown in an amber box while the layer is on: what the layer must not be taken for. */
+  caution?: string
   source: string
   defaultOn: boolean
   defaultOpacity: number
@@ -238,12 +263,12 @@ export type PanelLayer = ImageryPanelLayer | RoverPathPanelLayer | GeologyPanelL
 
 export const PANEL_GROUPS: Array<{ id: string; title: string; note?: string }> = [
   { id: 'mission', title: 'Mission' },
+  { id: 'measure', title: 'Radiation and heat' },
   {
     id: 'geology',
     title: 'Geologic map of Jezero',
     note: 'What the ground is made of, mapped by USGS scientists (Sun and Stack, 2020, map SIM 3464).',
   },
-  { id: 'measure', title: 'Measurements' },
   { id: 'photos', title: 'Photos' },
 ]
 
@@ -463,6 +488,23 @@ export const PANEL_LAYERS: PanelLayer[] = [
     defaultOn: false,
     defaultOpacity: 1,
     adjustable: false,
+  },
+  {
+    kind: 'imagery',
+    id: 'radiation',
+    group: 'measure',
+    title: 'Cosmic radiation (estimate)',
+    category: 'radiation',
+    note: 'Where cosmic rays reach the ground more, and where less.',
+    legend: 'Low ground has more air above it, so less radiation reaches it. High ground gets more.',
+    legendScale: { css: RADIATION_GRADIENT, low: 'Less (low ground)', high: 'More (high ground)' },
+    caution:
+      'An estimate, not a measurement. It follows NASA\'s 2002 map: about 10 rem per year in the lowest places, about 20 on the highest. It does not show solar storms or shelter from cliffs.',
+    source: 'Our estimate from NASA MOLA elevation, method of NASA/JPL/JSC map PIA03480',
+    imageryIds: ['radiation-estimate'],
+    defaultOn: false,
+    defaultOpacity: 0.6,
+    adjustable: true,
   },
   {
     kind: 'imagery',
