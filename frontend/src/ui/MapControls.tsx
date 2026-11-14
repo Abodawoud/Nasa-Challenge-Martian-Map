@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as Cesium from 'cesium'
+import { getZoomState } from '../globe/MarsViewer'
 
 /** The usual map buttons: zoom, compass (reset north), whole planet, fullscreen. */
 export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
   const [heading, setHeading] = useState(0)
   const [fullscreen, setFullscreen] = useState(false)
+  const [canZoomIn, setCanZoomIn] = useState(true)
+  const [canZoomOut, setCanZoomOut] = useState(true)
 
   useEffect(() => {
     if (!viewer) return
@@ -16,10 +19,26 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
     const update = () => {
       const h = camera.heading
       if (typeof h === 'number' && Number.isFinite(h)) setHeading(Cesium.Math.toDegrees(h))
+      try {
+        const zoom = getZoomState(viewer)
+        setCanZoomIn(zoom.canZoomIn)
+        setCanZoomOut(zoom.canZoomOut)
+      } catch {
+        // A camera in mid-switch can't be measured; keep the last state.
+      }
     }
     update()
-    const remove = camera.changed.addEventListener(update)
-    return () => remove()
+    const removeCamera = camera.changed.addEventListener(update)
+    // Also after a mode switch and when terrain under the camera finishes loading.
+    const removeMorph = viewer.scene.morphComplete.addEventListener(update)
+    const removeTiles = viewer.scene.globe.tileLoadProgressEvent.addEventListener((left: number) => {
+      if (left === 0) update()
+    })
+    return () => {
+      removeCamera()
+      removeMorph()
+      removeTiles()
+    }
   }, [viewer])
 
   useEffect(() => {
@@ -28,17 +47,16 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
 
-  // Smooth zoom: the step is spread over ~350 ms with an ease-out curve, frame by frame.
+  // Smooth zoom: one step is 45% of the current size, spread over ~350 ms with an ease-out
+  // curve. The step is cut to the room left before the limit, so it stops exactly there.
   // Works the same in 2D, 2.5D and 3D because it uses Cesium's own zoomIn / zoomOut.
   const zoom = (direction: 1 | -1) => {
     if (!viewer) return
     const { camera, scene } = viewer
-    const frustum = camera.frustum as Cesium.OrthographicOffCenterFrustum
-    const size =
-      scene.mode === Cesium.SceneMode.SCENE2D
-        ? (frustum.right ?? 0) - (frustum.left ?? 0)
-        : camera.positionCartographic.height
-    const total = Math.abs(size) * 0.45
+    const state = getZoomState(viewer)
+    if (direction === 1 ? !state.canZoomIn : !state.canZoomOut) return
+    const room = direction === 1 ? state.roomIn : state.roomOut
+    const total = Math.min(state.size * 0.45, room)
     const duration = 350
     const start = performance.now()
     let done = 0
@@ -48,8 +66,10 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
       const target = total * easeOut(t)
       const delta = target - done
       done = target
-      if (direction === 1) camera.zoomIn(delta)
-      else camera.zoomOut(delta)
+      if (delta > 0) {
+        if (direction === 1) camera.zoomIn(delta)
+        else camera.zoomOut(delta)
+      }
       scene.requestRender()
       if (t < 1) requestAnimationFrame(step)
     }
@@ -78,11 +98,11 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
   return (
     <div className="absolute bottom-14 right-4 z-10 flex flex-col gap-2">
       <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-md">
-        <ControlButton label="Zoom in" onClick={() => zoom(1)}>
+        <ControlButton label="Zoom in" onClick={() => zoom(1)} disabled={!canZoomIn}>
           <path d="M12 5v14M5 12h14" />
         </ControlButton>
         <div className="h-px bg-slate-200" />
-        <ControlButton label="Zoom out" onClick={() => zoom(-1)}>
+        <ControlButton label="Zoom out" onClick={() => zoom(-1)} disabled={!canZoomOut}>
           <path d="M5 12h14" />
         </ControlButton>
       </div>
@@ -114,14 +134,25 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
   )
 }
 
-function ControlButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+function ControlButton({
+  label,
+  onClick,
+  disabled = false,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  children: ReactNode
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
-      title={label}
-      className="flex h-10 w-10 items-center justify-center text-slate-700 transition-colors hover:bg-slate-100 hover:text-nasa-blue focus-visible:outline-2 focus-visible:outline-nasa-blue active:bg-slate-200"
+      title={disabled ? `${label} (limit reached)` : label}
+      className="flex h-10 w-10 items-center justify-center text-slate-700 transition-colors hover:bg-slate-100 hover:text-nasa-blue focus-visible:outline-2 focus-visible:outline-nasa-blue active:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent disabled:hover:text-slate-300"
     >
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         {children}

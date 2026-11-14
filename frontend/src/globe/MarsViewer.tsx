@@ -20,6 +20,82 @@ const MARS_SKY_BELOW_M = 60_000
 const PITCH_CV_RAD = Cesium.Math.toRadians(-50)
 /** 2.5D: highest camera, so the flat map always fills the screen. */
 const MAX_HEIGHT_CV_M = 400_000
+/** 2D: closest zoom, the width of the view on the ground. */
+const MIN_WIDTH_2D_M = 1_000
+/** Half the width and half the height of the flat (2D / 2.5D) Mars map, in metres. */
+const HALF_WORLD_X = Math.PI * MARS_ELLIPSOID.maximumRadius
+const HALF_WORLD_Y = HALF_WORLD_X / 2
+
+/** 2D: furthest zoom, so the map always fills the screen (limited by width and height). */
+function maxWidth2D(scene: Cesium.Scene) {
+  const aspect = scene.canvas.clientWidth / Math.max(1, scene.canvas.clientHeight)
+  return Math.min(2 * HALF_WORLD_X, 2 * HALF_WORLD_Y * aspect)
+}
+
+/** Last ground height measured under the camera (Trek terrain scale, about 5.6 km at Jezero). */
+let lastGroundHeight = 5_600
+
+export interface ZoomState {
+  canZoomIn: boolean
+  canZoomOut: boolean
+  /** How far a zoom-in step may still go, in Cesium zoom units (metres), before the limit. */
+  roomIn: number
+  /** How far a zoom-out step may still go before the limit. */
+  roomOut: number
+  /** Current "size" used to scale a zoom step: view width in 2D, distance to the ground otherwise. */
+  size: number
+}
+
+/**
+ * Where the camera is between its closest and furthest zoom. The zoom buttons use it to
+ * disable themselves and to stop a step exactly at the limit. Same limits as keepCameraSafe.
+ */
+export function getZoomState(viewer: Cesium.Viewer): ZoomState {
+  const { scene, camera } = viewer
+  const none: ZoomState = { canZoomIn: false, canZoomOut: false, roomIn: 0, roomOut: 0, size: 0 }
+  if (scene.mode === Cesium.SceneMode.MORPHING) return none
+
+  if (scene.mode === Cesium.SceneMode.SCENE2D) {
+    const f = camera.frustum as Cesium.OrthographicOffCenterFrustum
+    if (f.right === undefined || f.left === undefined) return none
+    const width = f.right - f.left
+    // Cesium's 2D zoomIn(amount) shrinks the view width by about `amount`.
+    const roomIn = Math.max(0, width - MIN_WIDTH_2D_M)
+    const roomOut = Math.max(0, maxWidth2D(scene) - width)
+    return { canZoomIn: roomIn > width * 0.01, canZoomOut: roomOut > width * 0.01, roomIn, roomOut, size: width }
+  }
+
+  // 3D and 2.5D: zoom moves the camera along the view, towards the point at the screen centre.
+  const centre = new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2)
+  const ray = camera.getPickRay(centre)
+  const hit = ray ? scene.globe.pick(ray, scene) : undefined
+  const carto = camera.positionCartographic
+  // getHeight can return nothing for a moment (tiles under the camera being replaced, often
+  // in 2.5D close to the ground). Use the last known ground height then, never 0.
+  const measured = scene.globe.getHeight(carto)
+  if (measured !== undefined) lastGroundHeight = measured
+  const ground = measured ?? lastGroundHeight
+  const aboveGround = carto.height - ground
+  // In 2.5D the picked point and the camera use different coordinate frames, so the
+  // distance to the target is only measured in 3D. 2.5D uses the height alone.
+  const toTarget =
+    hit && scene.mode === Cesium.SceneMode.SCENE3D ? Cesium.Cartesian3.distance(camera.positionWC, hit) : Infinity
+  // Room to zoom in = distance along the view until the camera reaches the height floor
+  // (or the ground point it looks at, whichever comes first).
+  const heightLeft = aboveGround - MIN_CAMERA_ABOVE_GROUND_M
+  const down = Math.max(0.05, Math.sin(-camera.pitch) || 0.05)
+  const roomIn = Math.max(0, Math.min(toTarget - MIN_CAMERA_ABOVE_GROUND_M, heightLeft / down))
+  const top = scene.mode === Cesium.SceneMode.COLUMBUS_VIEW ? MAX_HEIGHT_CV_M : MAX_CAMERA_DISTANCE_M
+  const height = scene.mode === Cesium.SceneMode.COLUMBUS_VIEW ? camera.position.z : carto.height
+  const roomOut = Math.max(0, top - height)
+  return {
+    canZoomIn: heightLeft > 2 && roomIn > 2,
+    canZoomOut: roomOut > top * 0.01,
+    roomIn,
+    roomOut,
+    size: Math.max(Number.isFinite(toTarget) ? toTarget : aboveGround / down, 1),
+  }
+}
 
 export interface CursorInfo {
   lon: number
@@ -89,8 +165,8 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
     scene.morphComplete.addEventListener(updateSky)
 
     // 2D: keep the map edges at the screen edges (no dragging the map off screen).
-    const halfWorldX = Math.PI * MARS_ELLIPSOID.maximumRadius
-    const halfWorldY = halfWorldX / 2
+    const halfWorldX = HALF_WORLD_X
+    const halfWorldY = HALF_WORLD_Y
     const clamp2D = () => {
       if (scene.mode !== Cesium.SceneMode.SCENE2D) return
       const f = viewer.camera.frustum as Cesium.OrthographicOffCenterFrustum
@@ -122,9 +198,8 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
         const width = f.right - f.left
         // The whole view must stay inside the map: limited by the map's width AND its height
         // (a tall screen would otherwise show space above and below).
-        const aspect = scene.canvas.clientWidth / Math.max(1, scene.canvas.clientHeight)
-        const maxWidth = Math.min(2 * halfWorldX, 2 * halfWorldY * aspect)
-        const target = width > maxWidth ? maxWidth : width < 1_000 ? 1_000 : width
+        const maxWidth = maxWidth2D(scene)
+        const target = width > maxWidth ? maxWidth : width < MIN_WIDTH_2D_M ? MIN_WIDTH_2D_M : width
         if (target !== width) {
           const k = target / width
           f.right *= k
@@ -142,6 +217,13 @@ export function MarsViewer({ onReady, onCursor, onTerrainStatus }: Props) {
         const p = camera.position
         if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return
         if (p.z > MAX_HEIGHT_CV_M) p.z = MAX_HEIGHT_CV_M
+        // Ground floor. Cesium's own collision check does not work with this terrain in 2.5D,
+        // so without this the camera could zoom through the ground (empty screen).
+        // In 2.5D, position.z is the height on the same scale as the terrain.
+        const measured = scene.globe.getHeight(camera.positionCartographic)
+        if (measured !== undefined) lastGroundHeight = measured
+        const floor = (measured ?? lastGroundHeight) + MIN_CAMERA_ABOVE_GROUND_M
+        if (p.z < floor) p.z = floor
         const margin = p.z * 6.5
         const limit = (value: number, world: number) =>
           margin >= world ? 0 : Math.min(world - margin, Math.max(-world + margin, value))
