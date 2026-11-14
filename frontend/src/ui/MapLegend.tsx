@@ -27,17 +27,26 @@ function Sample({ item }: { item: LegendItem }) {
 
 function Row({ item }: { item: LegendItem }) {
   return (
-    <HStack as="li" gap="2" minW="0">
-      <Sample item={item} />
-      <Text fontSize="xs" color="gray.800" lineHeight="1.3">
-        {item.label}
-      </Text>
+    <HStack as="li" gap="2" minW="0" align="flex-start">
+      <Box mt="1px">
+        <Sample item={item} />
+      </Box>
+      <Box minW="0">
+        <Text fontSize="xs" fontWeight="600" color="gray.900" lineHeight="1.3">
+          {item.label}
+        </Text>
+        {item.hint && (
+          <Text fontSize="2xs" color="gray.600" lineHeight="1.35">
+            {item.hint}
+          </Text>
+        )}
+      </Box>
     </HStack>
   )
 }
 
 /** Markers that are on the map whatever layers are on. */
-const ALWAYS: LegendItem[] = [{ color: '#e8231f', label: 'Perseverance landing site (2021)', dot: true }]
+const ALWAYS: LegendItem[] = [{ color: '#e8231f', label: 'Perseverance landing site', dot: true, hint: 'Where the rover touched down in February 2021.' }]
 
 export function MapLegend({ activeLayers }: { activeLayers: string[] }) {
   const [open, setOpen] = useState(true)
@@ -75,9 +84,9 @@ export function MapLegend({ activeLayers }: { activeLayers: string[] }) {
       bottom="4"
       right="16"
       zIndex="10"
-      w="250px"
+      w="290px"
       maxW="calc(100% - 96px)"
-      maxH="min(60%, 420px)"
+      maxH="min(70%, 520px)"
       overflowY="auto"
       overscrollBehavior="contain"
       bg="whiteAlpha.950"
@@ -108,8 +117,13 @@ export function MapLegend({ activeLayers }: { activeLayers: string[] }) {
 
         {blocks.map((entry) => (
           <Box key={entry.id} px="3" py="2.5" borderTopWidth="1px" borderColor="gray.100">
-            <Text as="h3" fontSize="2xs" fontWeight="700" letterSpacing="0.06em" textTransform="uppercase" color="gray.600" mb="1.5">
+            <Text as="h3" fontSize="2xs" fontWeight="700" letterSpacing="0.06em" textTransform="uppercase" color="brand.700">
               {entry.title}
+            </Text>
+            {/* What this layer is, in one line, then how to read it. */}
+            <Text fontSize="2xs" color="gray.600" lineHeight="1.35" mb="2">
+              {entry.note}
+              {entry.legend ? ` ${entry.legend}` : ''}
             </Text>
             {entry.legendScale && (
               <Box mb={entry.legendItems ? '2' : '0'}>

@@ -221,6 +221,8 @@ export interface LegendItem {
   line?: boolean
   /** Draw the sample as a round marker. */
   dot?: boolean
+  /** One plain sentence: what this thing is. Shown in the legend. */
+  hint?: string
   dashed?: boolean
 }
 
@@ -263,15 +265,16 @@ export interface GeologyPanelLayer extends PanelBase {
 }
 export type PanelLayer = ImageryPanelLayer | RoverPathPanelLayer | GeologyPanelLayer
 
-export const PANEL_GROUPS: Array<{ id: string; title: string; note?: string }> = [
+export const PANEL_GROUPS: Array<{ id: string; title: string; note?: string; startClosed?: boolean }> = [
   { id: 'mission', title: 'Mission' },
   { id: 'measure', title: 'Radiation and heat' },
   {
     id: 'geology',
     title: 'Geologic map of Jezero',
     note: 'What the ground is made of, mapped by USGS scientists (Sun and Stack, 2020, map SIM 3464).',
+    startClosed: true,
   },
-  { id: 'photos', title: 'Photos' },
+  { id: 'photos', title: 'Photos', startClosed: true },
 ]
 
 const USGS_MAP = 'USGS SIM 3464, Sun and Stack (2020)'
@@ -283,21 +286,24 @@ const DASH_DOT = [10, 5, 2, 5]
  * The colours of the 14 rock units, exactly as the USGS web map draws them (read from the
  * service's own drawing rules on 2026-11-15). The key is the service's `unit` number.
  */
-const ROCK_UNITS: Array<[string, string, string]> = [
-  ['0', '#004deb', 'Jezero fan 2'],
-  ['1', '#0099ff', 'Jezero fan 1'],
-  ['2', '#eb4d80', 'Jezero floor'],
-  ['3', '#de4d00', 'Lower etched'],
-  ['4', '#0000eb', 'Nili Planum fan'],
-  ['5', '#b300eb', 'Nili Planum 2'],
-  ['6', '#ebcc99', 'Nili Planum 1'],
-  ['7', '#ffff00', 'Eolian bedforms (wind ripples)'],
-  ['8', '#ccde99', 'Smooth, undivided'],
-  ['9', '#ebb3ff', 'Rugged bright'],
-  ['10', '#ffb300', 'Upper etched'],
-  ['11', '#b3804d', 'Crater rim'],
-  ['12', '#669900', 'Crater ejecta'],
-  ['13', '#ebeb66', 'Crater interior'],
+// The last text of each unit is a short, plain version of the USGS interpretation of that
+// unit (the service's `Unit_Interpretation` field, read 2026-11-15). Where USGS is not sure,
+// it says "probably".
+const ROCK_UNITS: Array<[string, string, string, string]> = [
+  ['0', '#004deb', 'Jezero fan 2', 'River delta: mud and sand that a river dropped into a lake. The younger part.'],
+  ['1', '#0099ff', 'Jezero fan 1', 'An older, worn delta or lake deposit.'],
+  ['2', '#eb4d80', 'Jezero floor', 'Probably volcanic ash or dust that fell from the air and covered the crater floor.'],
+  ['3', '#de4d00', 'Lower etched', 'Probably volcanic ash, later changed by lake water.'],
+  ['4', '#0000eb', 'Nili Planum fan', 'Sand and gravel left by the last river flows.'],
+  ['5', '#b300eb', 'Nili Planum 2', 'Probably volcanic ash or dust that fell from the air, also on the crater rim.'],
+  ['6', '#ebcc99', 'Nili Planum 1', 'Very old crust: the rock that the Jezero impact hit.'],
+  ['7', '#ffff00', 'Eolian bedforms (wind ripples)', 'Loose sand shaped into ripples by the wind. The youngest unit.'],
+  ['8', '#ccde99', 'Smooth, undivided', 'Loose material: from slides, ash or wind, or sand and pebbles left behind.'],
+  ['9', '#ebb3ff', 'Rugged bright', 'Hard leftover pieces of a layer that was once wider. Its origin is not known.'],
+  ['10', '#ffb300', 'Upper etched', 'Probably volcanic ash that covers older rock.'],
+  ['11', '#b3804d', 'Crater rim', 'Old rock pushed up by an impact.'],
+  ['12', '#669900', 'Crater ejecta', 'Rock and soil thrown out by an impact.'],
+  ['13', '#ebeb66', 'Crater interior', 'Fallen blocks or other deposits inside two small craters.'],
 ]
 
 // Order matters: this is also the drawing order, first entry on top (see layerControl.ts).
@@ -310,7 +316,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'vector',
     note: 'Every drive of the rover since landing in 2021.',
     legendItems: [
-      { color: '#ffffff', label: 'Path the rover drove', line: true },
+      { color: '#ffffff', label: 'Path the rover drove', line: true, hint: 'Real drives, from NASA mission data.' },
       { color: '#ffffff', label: 'Where the rover was last', dot: true },
     ],
     source: 'NASA/JPL-Caltech, Mars 2020 mission map',
@@ -325,7 +331,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     title: 'Landing ellipse',
     category: 'geology',
     note: 'The area the rover was planned to land in.',
-    legendItems: [{ color: '#ffffff', label: 'Planned landing area', line: true }],
+    legendItems: [{ color: '#ffffff', label: 'Planned landing area', line: true, hint: 'The rover was expected to touch down somewhere inside this line.' }],
     source: USGS_MAP,
     geology: { serviceLayer: 2, geometry: 'polygon', styles: {}, fallback: { stroke: '#ffffff', width: 3 }, countWord: 'outline' },
     defaultOn: false,
@@ -340,8 +346,8 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'geology',
     note: 'Small craters and blocks of broken old rock.',
     legendItems: [
-      { color: BLACK, label: 'Crater, 200 to 500 m', dot: true },
-      { color: '#ff0000', label: 'Megabreccia (broken old rock)', dot: true },
+      { color: BLACK, label: 'Crater, 200 to 500 m', dot: true, hint: 'A crater too small to draw as an area.' },
+      { color: '#ff0000', label: 'Megabreccia (broken old rock)', dot: true, hint: 'Big blocks of very old crust, broken by impacts.' },
     ],
     source: USGS_MAP,
     geology: {
@@ -365,7 +371,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     title: 'Cross sections',
     category: 'geology',
     note: 'The two lines along which the map shows a cut through the ground.',
-    legendItems: [{ color: BLACK, label: 'Cross section line', line: true }],
+    legendItems: [{ color: BLACK, label: 'Cross section line', line: true, hint: 'The USGS map shows a cut through the ground along this line.' }],
     source: USGS_MAP,
     geology: { serviceLayer: 3, geometry: 'line', styles: {}, fallback: { stroke: BLACK, width: 2.5, halo: true }, countWord: 'lines' },
     defaultOn: false,
@@ -380,10 +386,10 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'geology',
     note: 'Old river channels, crater rims, ridges and the fronts of the delta.',
     legendItems: [
-      { color: '#005ce6', label: 'River channel', line: true, dashed: true },
-      { color: '#00c5ff', label: 'Delta lobe front', line: true, dashed: true },
-      { color: BLACK, label: 'Crater rim crest', line: true },
-      { color: BLACK, label: 'Lineament, buried crater', line: true, dashed: true },
+      { color: '#005ce6', label: 'River channel', line: true, dashed: true, hint: 'Where water once flowed.' },
+      { color: '#00c5ff', label: 'Delta lobe front', line: true, dashed: true, hint: 'The outer edge of a tongue of the river delta.' },
+      { color: BLACK, label: 'Crater rim crest', line: true, hint: 'The top line of a crater wall.' },
+      { color: BLACK, label: 'Lineament, buried crater', line: true, dashed: true, hint: 'A straight feature in the ground, or the rim of a crater that is now covered.' },
     ],
     source: USGS_MAP,
     geology: {
@@ -413,8 +419,8 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'geology',
     note: 'The lines where one rock unit meets another.',
     legendItems: [
-      { color: BLACK, label: 'Certain', line: true },
-      { color: BLACK, label: 'Approximate, inferred or hidden', line: true, dashed: true },
+      { color: BLACK, label: 'Certain', line: true, hint: 'The border between two rock units is clearly seen.' },
+      { color: BLACK, label: 'Approximate, inferred or hidden', line: true, dashed: true, hint: 'The border is not clearly seen: its place is a best estimate.' },
     ],
     source: USGS_MAP,
     geology: {
@@ -445,8 +451,8 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'geology',
     note: 'Ridged ground and dark material lying on top of the rock.',
     legendItems: [
-      { color: 'rgba(0,0,0,0.35)', label: 'Ridged ground' },
-      { color: 'rgba(20,20,20,0.6)', label: 'Dark mantling material' },
+      { color: 'rgba(0,0,0,0.35)', label: 'Ridged ground', hint: 'Ground covered with many small ridges.' },
+      { color: 'rgba(20,20,20,0.6)', label: 'Dark mantling material', hint: 'A thin dark cover lying on top of the rock.' },
     ],
     source: USGS_MAP,
     geology: {
@@ -471,7 +477,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     title: 'Geologic units',
     category: 'geology',
     note: 'The 14 kinds of rock and ground, each in its own colour.',
-    legendItems: ROCK_UNITS.map(([, color, label]) => ({ color, label })),
+    legendItems: ROCK_UNITS.map(([, color, label, hint]) => ({ color, label, hint })),
     source: USGS_MAP,
     geology: {
       serviceLayer: 8,
@@ -491,7 +497,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     title: 'Map boundary',
     category: 'geology',
     note: 'The edge of the area the geologic map covers.',
-    legendItems: [{ color: BLACK, label: 'Edge of the geologic map', line: true }],
+    legendItems: [{ color: BLACK, label: 'Edge of the geologic map', line: true, hint: 'Outside this line the USGS map has no data.' }],
     source: USGS_MAP,
     geology: { serviceLayer: 0, geometry: 'polygon', styles: {}, fallback: { stroke: BLACK, width: 3, halo: true }, countWord: 'outline' },
     defaultOn: false,

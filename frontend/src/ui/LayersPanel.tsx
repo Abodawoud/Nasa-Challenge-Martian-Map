@@ -2,8 +2,8 @@
 // PANEL_LAYERS (layers.config.ts): a switch, and a transparency slider for overlays.
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type * as Cesium from 'cesium'
-import { Badge, Box, Button, Flex, HStack, IconButton, SimpleGrid, Slider, Spinner, Switch, Text } from '@chakra-ui/react'
-import { Layers, TriangleAlert, X } from 'lucide-react'
+import { Badge, Box, Button, Flex, HStack, IconButton, Slider, Spinner, Switch, Text } from '@chakra-ui/react'
+import { ChevronDown, Layers, TriangleAlert, X } from 'lucide-react'
 import { PANEL_GROUPS, PANEL_LAYERS } from '../globe/layers.config'
 import type { LayerCategory, PanelLayer } from '../globe/layers.config'
 import { setLayerOpacity, setLayerVisible } from '../globe/layerControl'
@@ -40,6 +40,8 @@ interface Props {
 export function LayersPanel({ viewer, onActiveChange }: Props) {
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState(initialState)
+  /** Groups that are folded: only their heading shows. */
+  const [closed, setClosed] = useState<Record<string, boolean>>(() => Object.fromEntries(PANEL_GROUPS.map((group) => [group.id, !!group.startClosed])))
   const buttonRef = useRef<HTMLButtonElement>(null)
   const count = PANEL_LAYERS.filter((entry) => rows[entry.id].on).length
 
@@ -138,16 +140,43 @@ export function LayersPanel({ viewer, onActiveChange }: Props) {
 
           {PANEL_GROUPS.map((group) => (
             <Fragment key={group.id}>
-              <Box px="4" pt="3" pb="2" bg="gray.50" borderBottomWidth="1px" borderColor="gray.200">
-                <Text as="h3" fontSize="xs" fontWeight="700" letterSpacing="0.06em" textTransform="uppercase" color="brand.700">
-                  {group.title}
-                </Text>
-                {group.note && (
-                  <Text fontSize="xs" color="gray.600" mt="0.5">
-                    {group.note}
+              {/* The group heading is a button: it folds and unfolds the group. */}
+              <Box as="h3" m="0" borderBottomWidth="1px" borderColor="gray.200">
+                <Flex
+                  as="button"
+                  w="full"
+                  align="flex-start"
+                  gap="2"
+                  px="4"
+                  py="2.5"
+                  bg="gray.50"
+                  textAlign="left"
+                  cursor="pointer"
+                  aria-expanded={!closed[group.id]}
+                  aria-controls={`layers-group-${group.id}`}
+                  onClick={() => setClosed((all) => ({ ...all, [group.id]: !all[group.id] }))}
+                  _hover={{ bg: 'gray.100' }}
+                  _focusVisible={{ outline: '2px solid', outlineColor: 'brand.500', outlineOffset: '-2px' }}
+                >
+                  <Box flexShrink={0} mt="0.5" color="brand.700" transform={closed[group.id] ? 'rotate(-90deg)' : undefined} transition="transform 0.15s ease">
+                    <ChevronDown size={14} aria-hidden />
+                  </Box>
+                  <Box flex="1" minW="0">
+                    <Text fontSize="xs" fontWeight="700" letterSpacing="0.06em" textTransform="uppercase" color="brand.700">
+                      {group.title}
+                    </Text>
+                    {group.note && !closed[group.id] && (
+                      <Text fontSize="xs" fontWeight="400" color="gray.600" mt="0.5">
+                        {group.note}
+                      </Text>
+                    )}
+                  </Box>
+                  <Text flexShrink={0} fontSize="2xs" fontWeight="500" color="gray.600" fontVariantNumeric="tabular-nums" mt="0.5">
+                    {PANEL_LAYERS.filter((entry) => entry.group === group.id && rows[entry.id].on).length} of {PANEL_LAYERS.filter((entry) => entry.group === group.id).length} on
                   </Text>
-                )}
+                </Flex>
               </Box>
+              <Box id={`layers-group-${group.id}`} hidden={closed[group.id]}>
               {PANEL_LAYERS.filter((entry) => entry.group === group.id).map((entry) => {
                 const row = rows[entry.id]
                 const category = CATEGORY[entry.category]
@@ -231,30 +260,6 @@ export function LayersPanel({ viewer, onActiveChange }: Props) {
                       </HStack>
                     )}
 
-                    {row.on && entry.legendItems && (
-                      <SimpleGrid as="ul" columns={2} columnGap="3" rowGap="1" mt="2" listStyleType="none">
-                        {entry.legendItems.map((item) => (
-                          <HStack as="li" key={item.label} gap="1.5" minW="0">
-                            <Box
-                              aria-hidden
-                              flexShrink={0}
-                              w={item.line ? '14px' : '10px'}
-                              h={item.line ? '0' : '10px'}
-                              borderRadius={item.line ? '0' : '2px'}
-                              bg={item.line ? undefined : item.color}
-                              borderTopWidth={item.line ? '2px' : undefined}
-                              borderTopStyle={item.dashed ? 'dashed' : 'solid'}
-                              borderColor={item.line ? item.color : 'blackAlpha.400'}
-                              borderWidth={item.line ? undefined : '1px'}
-                            />
-                            <Text fontSize="2xs" color="gray.700" lineHeight="1.25">
-                              {item.label}
-                            </Text>
-                          </HStack>
-                        ))}
-                      </SimpleGrid>
-                    )}
-
                     {row.on && entry.adjustable && (
                       <Slider.Root
                         mt="2"
@@ -286,6 +291,7 @@ export function LayersPanel({ viewer, onActiveChange }: Props) {
                   </Box>
                 )
               })}
+              </Box>
             </Fragment>
           ))}
         </Box>
