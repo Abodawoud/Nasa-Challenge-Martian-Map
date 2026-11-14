@@ -64,28 +64,22 @@ export default function App() {
   }
 
   return (
-    // "mars-space" + data-sky (set by MarsViewer) draw the space or Mars sky behind the map.
-    <Box className="mars-space" position="relative" h="full" w="full" overflow="hidden">
-      <MarsViewer onReady={onReady} onCursor={setCursor} onTerrainStatus={setTerrain} />
-
-      <MapControls viewer={viewer} />
-
+    // Three rows: top bar, map, status bar. The map has its own area in the middle, so the
+    // bars never cover any part of it.
+    <Flex direction="column" h="full" w="full" overflow="hidden">
       {/* Top bar */}
       <Flex
         as="header"
-        position="absolute"
-        insetX="0"
-        top="0"
-        zIndex="10"
         align="center"
         gap="4"
         px="5"
         py="2.5"
-        bg="whiteAlpha.900"
-        backdropFilter="blur(8px)"
+        bg="white"
         borderBottomWidth="1px"
         borderColor="gray.200"
         shadow="sm"
+        zIndex="1"
+        flexShrink={0}
       >
         <HStack gap="3">
           <Circle size="9" bg="brand.600" color="white">
@@ -125,13 +119,15 @@ export default function App() {
         </Button>
       </Flex>
 
+      {/* The map. "mars-space" + data-sky (set by MarsViewer) draw the space or Mars sky behind it. */}
+      <Box className="mars-space" position="relative" flex="1" minH="0" overflow="hidden">
+        <MarsViewer onReady={onReady} onCursor={setCursor} onTerrainStatus={setTerrain} />
+        <MapControls viewer={viewer} />
+      </Box>
+
       {/* Bottom status bar */}
       <Flex
         as="footer"
-        position="absolute"
-        insetX="0"
-        bottom="0"
-        zIndex="10"
         wrap="wrap"
         align="center"
         columnGap="6"
@@ -140,10 +136,10 @@ export default function App() {
         py="1.5"
         fontSize="xs"
         color="gray.600"
-        bg="whiteAlpha.900"
-        backdropFilter="blur(8px)"
+        bg="white"
         borderTopWidth="1px"
         borderColor="gray.200"
+        flexShrink={0}
       >
         <HStack gap="1.5" fontVariantNumeric="tabular-nums" minW="230px">
           <MapPin size={13} aria-hidden />
@@ -171,7 +167,7 @@ export default function App() {
           Images and terrain: NASA/JPL-Caltech Mars Trek · USGS
         </Text>
       </Flex>
-    </Box>
+    </Flex>
   )
 }
 

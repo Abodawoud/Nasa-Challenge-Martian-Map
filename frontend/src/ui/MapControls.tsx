@@ -98,7 +98,7 @@ export function MapControls({ viewer }: { viewer: Cesium.Viewer | null }) {
   }
 
   return (
-    <VStack position="absolute" bottom="14" right="4" zIndex="10" gap="2">
+    <VStack position="absolute" bottom="4" right="4" zIndex="10" gap="2">
       <ControlGroup>
         <ControlButton label="Zoom in" onClick={() => zoom(1)} disabled={!canZoomIn}>
           <Plus size={18} aria-hidden />
