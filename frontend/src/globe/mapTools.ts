@@ -70,44 +70,72 @@ export function drawPosition(viewer: Cesium.Viewer, place: LonLat, lift = 2): Ce
 }
 
 /**
- * Call `redraw` whenever the ground on screen has changed, so shapes can be put on it again.
+ * Call `redraw` after the ground on screen has changed, so shapes can be put on it again.
  *
  * Why this is needed (measured 2026-11-15): the map draws coarse ground from far away and
  * detailed ground from near, and the two can differ by up to 100 m in height at the same
  * place (Trek's terrain is built from different height sources per zoom level). A shape that
- * took its height once is then under or above the ground that is shown: in a tilted view a
- * line seemed to cut through the air. So shapes take their heights again when the camera has
- * moved or new ground tiles have arrived, at most a few times per second.
+ * took its height once is then under or above the ground that is shown.
+ *
+ * When it calls (changed after a performance check on 2026-11-15): NOT while the camera
+ * moves and not while tiles are still arriving, but once things are quiet for a moment.
+ * Before, it called a few times per second during every move, and taking thousands of
+ * heights again each time made frames of up to 76 ms: the map felt jerky.
  *
  * Returns a function that stops it.
  */
 export function onGroundChanged(viewer: Cesium.Viewer, redraw: () => void): () => void {
   const { scene, camera } = viewer
-  const MIN_GAP_MS = 180
-  let last = 0
-  let tilesChanged = true
-  const seen = new Cesium.Cartesian3()
-  const stops = [
-    scene.globe.tileLoadProgressEvent.addEventListener(() => {
-      tilesChanged = true
-    }),
-    scene.morphComplete.addEventListener(() => {
-      tilesChanged = true
-    }),
-    scene.postRender.addEventListener(() => {
-      const now = performance.now()
-      if (now - last < MIN_GAP_MS) return
-      const moved = !Cesium.Cartesian3.equalsEpsilon(camera.positionWC, seen, 0, 0.5)
-      if (!moved && !tilesChanged) return
-      last = now
-      tilesChanged = false
-      Cesium.Cartesian3.clone(camera.positionWC, seen)
+  /** How long things must be quiet before shapes are put on the ground again. */
+  const QUIET_MS = 300
+  let moving = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const later = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = undefined
+      if (viewer.isDestroyed()) return
+      // Still moving: wait for the camera to stop (moveEnd calls `later` again).
+      if (moving) return
       redraw()
+    }, QUIET_MS)
+  }
+  const stops = [
+    camera.moveStart.addEventListener(() => {
+      moving = true
     }),
+    camera.moveEnd.addEventListener(() => {
+      moving = false
+      later()
+    }),
+    // New ground tiles arrived: every arrival pushes the redraw back, so it runs once, after the last one.
+    scene.globe.tileLoadProgressEvent.addEventListener(later),
+    scene.morphComplete.addEventListener(later),
   ]
+  later()
   return () => {
+    clearTimeout(timer)
     for (const stop of stops) stop()
   }
+}
+
+/**
+ * The part of the map the camera sees, with a margin, as a test for places. Used to put only
+ * the shapes in view on the ground again. When the view cannot be worked out (the whole
+ * planet, the horizon), every place counts as in view.
+ */
+export function inViewTest(viewer: Cesium.Viewer, margin = 0.25): (place: LonLat) => boolean {
+  const view = viewer.camera.computeViewRectangle(MARS_ELLIPSOID)
+  if (!view) return () => true
+  const west = Cesium.Math.toDegrees(view.west)
+  const east = Cesium.Math.toDegrees(view.east)
+  const south = Cesium.Math.toDegrees(view.south)
+  const north = Cesium.Math.toDegrees(view.north)
+  // The view crosses the date line, or is most of the planet: not worth cutting.
+  if (east < west || east - west > 90) return () => true
+  const dLon = (east - west) * margin
+  const dLat = (north - south) * margin
+  return (place) => place.lon >= west - dLon && place.lon <= east + dLon && place.lat >= south - dLat && place.lat <= north + dLat
 }
 
 /** Screen position of a place, or undefined when it is behind the planet or off the map. */

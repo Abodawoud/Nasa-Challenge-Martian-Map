@@ -10,7 +10,7 @@
 // No route is ever called "safe" or "safest": the data knows slope, bumps and pits at 20 m,
 // not rocks, dust storms or solar storms (PLAN.md D10).
 import * as Cesium from 'cesium'
-import { drawPosition, onGroundChanged, pickPlace, toolCursor, toolInput } from './mapTools'
+import { drawPosition, inViewTest, onGroundChanged, pickPlace, toolCursor, toolInput } from './mapTools'
 import type { LonLat } from './mapTools'
 import { ROCK_UNITS_SOURCE } from './layers.config'
 import { geologyAt } from './geologyLayer'
@@ -246,6 +246,10 @@ const CLICK_PX = 5
 /** How long the routes take to draw themselves in when they arrive. */
 const REVEAL_MS = 900
 const LIFT_M = 4
+/** The chosen route floats this much higher, so it is drawn cleanly over a route that shares its way. */
+const CHOSEN_LIFT_M = 3
+/** Putting lines on the ground again is done in slices of this many milliseconds per frame. */
+const SLICE_MS = 4
 
 interface DrawnRoute {
   id: string
@@ -266,6 +270,8 @@ export class RouteTool {
   private revealStart = 0
   private reach: Cesium.ImageryLayer | null = null
   private area: Bounds | null = null
+  /** Counts the runs of reground(): a newer run stops an older one. */
+  private regroundRun = 0
   private areaPlaces: LonLat[] = []
   private areaPositions: Cesium.Cartesian3[] = []
   private areaEntities: Cesium.Entity[] = []
@@ -414,7 +420,7 @@ export class RouteTool {
           shown: true,
           entity: undefined as unknown as Cesium.Entity,
         }
-        drawn.positions = drawn.places.map((place) => drawPosition(this.viewer, place, LIFT_M))
+        drawn.positions = drawn.places.map((place) => drawPosition(this.viewer, place, this.liftOf(route.id)))
         const chosen = () => drawn.id === this.selected
         drawn.entity = this.viewer.entities.add({
           polyline: {
@@ -441,7 +447,13 @@ export class RouteTool {
   /** The route that is drawn wide and on top. */
   setSelected(id: string) {
     this.selected = id
+    // The chosen route floats a little higher: put the lines on the ground again.
+    this.reground(true)
     this.viewer.scene.requestRender()
+  }
+
+  private liftOf(id: string) {
+    return LIFT_M + (id === this.selected ? CHOSEN_LIFT_M : 0)
   }
 
   /** Show or hide one route. */
@@ -512,16 +524,73 @@ export class RouteTool {
     if (performance.now() - this.revealStart < REVEAL_MS) requestAnimationFrame(this.animate)
   }
 
-  private reground() {
+  /**
+   * Put the lines and marks on the ground that is shown now.
+   *
+   * Made to cost little (measured 2026-11-15: doing all points at once took up to 76 ms and
+   * made the map jerky):
+   *   - only the points the camera sees, plus a margin, are done again. The rest keep their place
+   *   - the work is cut in slices of a few milliseconds, one slice per frame
+   *   - a newer run stops an older one
+   * `everything` also redoes the points out of view (used when the chosen route changes).
+   */
+  private reground(everything = false) {
     if (this.viewer.isDestroyed()) return
-    for (const route of this.routes) route.positions = route.places.map((place) => drawPosition(this.viewer, place, LIFT_M))
-    if (this.areaPlaces.length) this.areaPositions = this.areaPlaces.map((place) => drawPosition(this.viewer, place, LIFT_M))
+    const run = ++this.regroundRun
+    const inView = everything ? () => true : inViewTest(this.viewer)
+
+    // The two marks are two points: done at once.
     for (const which of ['start', 'goal'] as const) {
       const place = this.ends[which]
       const entity = this.endEntities[which]
       if (place && entity) entity.position = new Cesium.ConstantPositionProperty(drawPosition(this.viewer, place, LIFT_M))
     }
-    if (this.routes.length || this.areaPlaces.length) this.viewer.scene.requestRender()
+
+    const jobs: Array<{ places: LonLat[]; old: Cesium.Cartesian3[]; lift: number; done: (positions: Cesium.Cartesian3[]) => void }> = this.routes.map((route) => ({
+      places: route.places,
+      old: route.positions,
+      lift: this.liftOf(route.id),
+      done: (positions) => {
+        route.positions = positions
+      },
+    }))
+    if (this.areaPlaces.length) {
+      jobs.push({
+        places: this.areaPlaces,
+        old: this.areaPositions,
+        lift: LIFT_M,
+        done: (positions) => {
+          this.areaPositions = positions
+        },
+      })
+    }
+
+    let job = 0
+    let index = 0
+    let next: Cesium.Cartesian3[] = []
+    const slice = () => {
+      if (run !== this.regroundRun || this.viewer.isDestroyed()) return
+      const started = performance.now()
+      while (job < jobs.length) {
+        const { places, old, lift, done } = jobs[job]
+        while (index < places.length) {
+          const place = places[index]
+          next.push(old[index] && !inView(place) ? old[index] : drawPosition(this.viewer, place, lift))
+          index++
+          // Look at the clock every 32 points. Out of time: go on in the next frame.
+          if ((index & 31) === 0 && performance.now() - started > SLICE_MS) {
+            requestAnimationFrame(slice)
+            return
+          }
+        }
+        done(next)
+        next = []
+        index = 0
+        job++
+        this.viewer.scene.requestRender()
+      }
+    }
+    slice()
   }
 
   private position(event: MouseEvent) {
