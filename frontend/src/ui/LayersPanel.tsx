@@ -24,6 +24,8 @@ interface RowState {
   /** Layers that are downloaded when first switched on. */
   loading: boolean
   error: boolean
+  /** Why it failed, for the small print under the message. */
+  reason?: string
   /** A line of facts about the layer, from its data. */
   info?: string
 }
@@ -63,7 +65,7 @@ export function LayersPanel({ viewer, onActiveChange }: Props) {
       .then((info) => patch(entry.id, { loading: false, ...(info ? { info } : {}) }))
       .catch((error) => {
         console.warn('[Layers] could not show', entry.id, error)
-        patch(entry.id, { on: false, loading: false, error: true })
+        patch(entry.id, { on: false, loading: false, error: true, reason: error instanceof Error ? error.message : String(error) })
       })
   }
 
@@ -224,6 +226,11 @@ export function LayersPanel({ viewer, onActiveChange }: Props) {
                       {row.error && (
                         <Text mt="2" fontSize="xs" color="red.700">
                           Could not load this layer. Switch it on again to retry.
+                          {row.reason && (
+                            <Text as="span" display="block" fontSize="2xs" color="gray.600">
+                              Reason: {row.reason}
+                            </Text>
+                          )}
                         </Text>
                       )}
                       {row.on && row.info && (

@@ -6,7 +6,7 @@
 //   - the rover path and the geologic map layers are downloaded and built only the first
 //     time they are switched on.
 import * as Cesium from 'cesium'
-import { PANEL_LAYERS } from './layers.config'
+import { IMAGERY_LAYERS, PANEL_LAYERS } from './layers.config'
 import type { PanelLayer } from './layers.config'
 import { createRoverPathLayer, loadRoverPath } from './pathLayer'
 import { createGeologyLayer, loadGeology } from './geologyLayer'
@@ -20,11 +20,47 @@ interface ViewerLayers {
   building: Map<string, Promise<void>>
 }
 
-const registry = new WeakMap<Cesium.Viewer, ViewerLayers>()
+/**
+ * The record of a viewer's layers is kept ON the viewer, not in this file.
+ *
+ * Why (a bug found on 2026-11-15): it used to be a list in this file. While developing, the
+ * browser swaps a changed file for a new copy and keeps the map running. The new copy had an
+ * empty list, so it did not know the map any more, and every switch answered "Could not load
+ * this layer" until the page was reloaded. Kept on the viewer, the record lives as long as
+ * the map does. If it is missing anyway, it is read back from the map itself.
+ */
+const RECORD = '__marsLayers'
+type WithRecord = Cesium.Viewer & { [RECORD]?: ViewerLayers }
+
+const providerUrl = (layer: Cesium.ImageryLayer) => String((layer.imageryProvider as { url?: string } | undefined)?.url ?? '')
+
+/** Find the layers on a map by their tile addresses. */
+function readFromMap(viewer: Cesium.Viewer): ViewerLayers {
+  const record: ViewerLayers = { imagery: new Map(), built: new Map(), building: new Map() }
+  for (let i = 0; i < viewer.imageryLayers.length; i++) {
+    const layer = viewer.imageryLayers.get(i)
+    const url = providerUrl(layer)
+    const config = IMAGERY_LAYERS.find((c) => url.includes(c.kind === 'trek-wmts' ? `/${c.layerId}/` : c.url))
+    if (config) {
+      record.imagery.set(config.id, layer)
+      continue
+    }
+    // Layers built on first use have their own made-up addresses (pathLayer.ts, geologyLayer.ts).
+    const entry = PANEL_LAYERS.find((p) => (p.kind === 'rover-path' && url.startsWith('rover-path/')) || (p.kind === 'geology' && url.startsWith(`geology-${p.geology.serviceLayer}/`)))
+    if (entry) record.built.set(entry.id, { layer })
+  }
+  return record
+}
+
+function layersOf(viewer: Cesium.Viewer): ViewerLayers {
+  const holder = viewer as WithRecord
+  holder[RECORD] ??= readFromMap(viewer)
+  return holder[RECORD]
+}
 
 /** Called once by MarsViewer with the layers it created from the config. */
 export function registerImageryLayers(viewer: Cesium.Viewer, imagery: Map<string, Cesium.ImageryLayer>) {
-  registry.set(viewer, { imagery, built: new Map(), building: new Map() })
+  ;(viewer as WithRecord)[RECORD] = { imagery, built: new Map(), building: new Map() }
 }
 
 /**
@@ -94,8 +130,8 @@ async function build(viewer: Cesium.Viewer, layers: ViewerLayers, entry: PanelLa
  * when there is one. Rejects when the layer could not be downloaded.
  */
 export async function setLayerVisible(viewer: Cesium.Viewer, entry: PanelLayer, visible: boolean, alpha: number): Promise<string | undefined> {
-  const layers = registry.get(viewer)
-  if (!layers) throw new Error('The map is not ready yet')
+  if (viewer.isDestroyed()) throw new Error('The map was closed')
+  const layers = layersOf(viewer)
   let info: string | undefined
 
   if (entry.kind === 'imagery') {
@@ -128,8 +164,8 @@ export async function setLayerVisible(viewer: Cesium.Viewer, entry: PanelLayer, 
 
 /** Transparency of one entry: 0 = invisible, 1 = solid. */
 export function setLayerOpacity(viewer: Cesium.Viewer, entry: PanelLayer, alpha: number) {
-  const layers = registry.get(viewer)
-  if (!layers) return
+  if (viewer.isDestroyed()) return
+  const layers = layersOf(viewer)
   if (entry.kind === 'imagery') {
     for (const id of entry.imageryIds) {
       const layer = layers.imagery.get(id)
