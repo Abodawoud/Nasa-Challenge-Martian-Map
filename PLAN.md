@@ -298,6 +298,24 @@ We **never** call Route B "safest". Slope is only one danger. Rocks, sand, dust 
 | Earth walking formula only | Simple | Wrong gravity |
 | ✅ **Mars-gravity walking model + suit/load factors + rover option, labelled "estimate"** | Uses real physics (gravity) and answers the challenge (suits, equipment, rovers) | Some numbers are assumptions, so we show them openly |
 
+### D14b. Several routes, then a check (decided with the user, 2026-11-15)
+
+The user asked for "something that creates routes and then checks which one is good". So the backend no longer makes only route A and route B.
+
+| Step | What happens |
+|---|---|
+| Create | Six ideas of "cheap": Shortest, Fastest (direction-aware, 16 walking directions), Lower-slope, Flattest, Smooth ground (bumpy ground and pits cost more), and Another way (a clearly different line) |
+| Check | Every route gets the same numbers: time, distance, climb, steep ground, bumpy ground, pits |
+| Remove | Look-alikes are joined. A route that wins no measure is left out (the recommended route and the runner-up always stay) |
+| Score | 0 to 100: time 40%, steep ground 30%, climb 15%, bumpy ground 15%. **The weights are our choice** and are shown in the app |
+| Explain | The best route is named with a reason built from its real numbers |
+
+Settings that are our choice (all in `backend/app/terrain.py` and `candidates.py`): a cell is "bumpy" above 0.4 m of roughness (6% of Jezero), a "pit" is a closed dip deeper than 2 m and smaller than 1 km² (4% of Jezero).
+
+Cautions the app adds from other data: loose sand (USGS rock map), radiation during the walk (0.64 mSv per day, Curiosity RAD, an estimate), and a walk longer than one 8-hour spacewalk (an assumption).
+
+The old `/api/route` (A and B) still exists. The app uses `/api/routes`.
+
 ### D15. Two view modes only: 2D and 3D (decided with the user, 2026-11-14)
 
 The 2.5D mode (Cesium "Columbus view", a tilted flat map) is dropped. Near the ground it showed the same as 3D, but with fewer controls (fixed tilt, lower zoom-out limit). It also caused several bugs: the map stopped drawing, and the camera went through the ground, because Cesium's own ground check does not work there with Trek terrain. **What we give up:** the "tilted map" look. 3D near the ground gives the same picture. Switching between 2D and 3D now keeps the same place and about the same zoom. Older mentions of 2.5D in this plan are history.

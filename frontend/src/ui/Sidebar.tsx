@@ -8,11 +8,11 @@ import type { ReactNode } from 'react'
 import type * as CesiumTypes from 'cesium'
 import * as Cesium from 'cesium'
 import { Box, Flex, IconButton, Link, Text, VStack } from '@chakra-ui/react'
-import { BookOpen, ExternalLink, Layers, ListTree, ChevronUp, MapPin, Navigation, Palette, Route, Ruler, X } from 'lucide-react'
+import { BookOpen, ClipboardList, ExternalLink, Layers, ListTree, ChevronUp, MapPin, Navigation, Palette, Route, Ruler, X } from 'lucide-react'
 import { MARS_ELLIPSOID, PERSEVERANCE_LANDING } from '../globe/mars'
 import { flyToJezero } from '../globe/MarsViewer'
 
-export type Tool = 'layers' | 'toc' | 'route' | 'measure' | 'identify' | 'places' | 'sources'
+export type Tool = 'layers' | 'toc' | 'briefing' | 'route' | 'measure' | 'identify' | 'places' | 'sources'
 
 interface RailProps {
   tool: Tool | null
@@ -28,6 +28,7 @@ export function ToolRail({ tool, onTool, legendOpen, onLegend, layerCount }: Rai
   const tools: Array<{ id: Tool; label: string; icon: ReactNode; badge?: number }> = [
     { id: 'layers', label: 'Layers', icon: <Layers size={19} aria-hidden />, badge: layerCount },
     { id: 'toc', label: 'TOC', icon: <ListTree size={19} aria-hidden /> },
+    { id: 'briefing', label: 'Briefing', icon: <ClipboardList size={19} aria-hidden /> },
     { id: 'route', label: 'Route', icon: <Route size={19} aria-hidden /> },
     { id: 'measure', label: 'Measure', icon: <Ruler size={19} aria-hidden /> },
     { id: 'identify', label: 'Place info', icon: <MapPin size={19} aria-hidden /> },

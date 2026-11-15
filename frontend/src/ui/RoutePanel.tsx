@@ -1,12 +1,14 @@
-// The Route tool's panel: choose a start and a goal, then compare two walking routes.
-// Route A is the shortest. Route B is the lower-slope one (never "safest", PLAN.md D10).
+// The Route tool's panel: choose a start and a goal. The backend creates several routes and
+// checks them. The panel shows the recommended one with its reason, the others ranked beside
+// it, and for the chosen route its numbers, what to take care of, and a height chart.
+// No route is ever called "safe" (PLAN.md D10).
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import type * as Cesium from 'cesium'
-import { Box, Button, Flex, HStack, IconButton, Spinner, Text, VStack } from '@chakra-ui/react'
-import { ArrowUpDown, Crosshair, Eye, EyeOff, Flag, Footprints, MapPin, Route, RotateCcw, TriangleAlert } from 'lucide-react'
-import { ROUTE_LOOK, RouteTool, fetchRoutes, formatDuration } from '../globe/route'
-import type { RouteAnswer, RouteResult } from '../globe/route'
+import { Box, Button, Flex, HStack, IconButton, SimpleGrid, Spinner, Text, VStack } from '@chakra-ui/react'
+import { ArrowUpDown, Award, Clock, Crosshair, Eye, EyeOff, Flag, Footprints, MapPin, Mountain, Radiation, Route, RotateCcw, ShieldAlert, Timer, TrendingUp, TriangleAlert, Waves, Wind } from 'lucide-react'
+import { RADIATION_MSV_PER_DAY, RouteTool, SPACEWALK_LIMIT_S, fetchReach, fetchRoutes, formatDuration, routeColor, sandOnRoute, walkDoseMsv } from '../globe/route'
+import type { Measure, ReachAnswer, RouteAnswer, RouteResult } from '../globe/route'
 import { waypointStore } from '../globe/identify'
 import { PERSEVERANCE_LANDING } from '../globe/mars'
 import { formatDistance, formatPlace } from '../globe/mapTools'
@@ -16,6 +18,7 @@ import { ToolCard } from './Sidebar'
 
 const whole = new Intl.NumberFormat('en', { maximumFractionDigits: 0 })
 const one = new Intl.NumberFormat('en', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const two = new Intl.NumberFormat('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 /** Places to start from or walk to, all inside the height map of Jezero. */
 const KNOWN_PLACES: Array<{ title: string; place: LonLat }> = [
@@ -25,7 +28,16 @@ const KNOWN_PLACES: Array<{ title: string; place: LonLat }> = [
   { title: 'Crater floor, east', place: { lon: 77.55, lat: 18.42 } },
 ]
 
+const BEST_AT: Record<Measure, string> = {
+  distance: 'Shortest',
+  time: 'Fastest',
+  steepness: 'Least steep',
+  climb: 'Least climb',
+  smooth: 'Smoothest ground',
+}
+
 type State = { kind: 'idle' } | { kind: 'loading' } | { kind: 'error'; why: string } | { kind: 'ready'; answer: RouteAnswer }
+type Reach = { kind: 'off' } | { kind: 'loading' } | { kind: 'error'; why: string } | { kind: 'on'; answer: ReachAnswer }
 
 interface Props {
   viewer: Cesium.Viewer | null
@@ -41,7 +53,12 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
   /** Which point the next click on the map sets. */
   const [picking, setPicking] = useState<'start' | 'goal' | null>('start')
   const [state, setState] = useState<State>({ kind: 'idle' })
-  const [shown, setShown] = useState({ a: true, b: true })
+  /** The route whose details are shown, and which is drawn wide on the map. */
+  const [selected, setSelected] = useState('')
+  const [hidden, setHidden] = useState<Record<string, boolean>>({})
+  /** Metres of loose sand on each route, from the USGS rock map (worked out after the routes arrive). */
+  const [sand, setSand] = useState<Record<string, number | undefined>>({})
+  const [reach, setReach] = useState<Reach>({ kind: 'off' })
   const saved = useSyncExternalStore(waypointStore.subscribe, waypointStore.get)
   // Reading the units here makes the distances follow the units setting.
   useSyncExternalStore(unitStore.subscribe, unitStore.get)
@@ -82,22 +99,41 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
     tool.current?.setEnds(start, goal)
   }, [start, goal, viewer])
 
-  // Both points are set: ask for the two routes. A newer pair cancels the older request.
+  // A new start: the walking-time map of the old start no longer fits.
+  useEffect(() => {
+    setReach({ kind: 'off' })
+    void tool.current?.setReach(null)
+  }, [start])
+
+  // Both points are set: ask for the routes. A newer pair cancels the older request.
   useEffect(() => {
     tool.current?.setRoutes([])
+    setSand({})
     if (!start || !goal) {
       setState({ kind: 'idle' })
       return
     }
     const abort = new AbortController()
     setState({ kind: 'loading' })
-    setShown({ a: true, b: true })
+    setHidden({})
     fetchRoutes(start, goal, abort.signal).then(
       (result) => {
         if (abort.signal.aborted) return
         if (result.state === 'error') return setState({ kind: 'error', why: result.why })
-        setState({ kind: 'ready', answer: result.answer })
-        tool.current?.setRoutes(result.answer.routes.filter((route) => route.found).map((route) => ({ id: route.id, points: route.points })))
+        const { answer } = result
+        const first = answer.recommendation?.id ?? answer.routes[0]?.id ?? ''
+        setState({ kind: 'ready', answer })
+        setSelected(first)
+        tool.current?.setRoutes(
+          answer.routes.map((route) => ({ id: route.id, points: route.points })),
+          first,
+        )
+        // Loose sand on each route, from the rock map. It can take a moment the first time.
+        for (const route of answer.routes) {
+          void sandOnRoute(route).then((metres) => {
+            if (!abort.signal.aborted) setSand((all) => ({ ...all, [route.id]: metres }))
+          })
+        }
       },
       () => undefined,
     )
@@ -115,22 +151,45 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
     setStart(goal)
     setGoal(start)
   }
-  const toggle = (id: 'a' | 'b') => {
-    const next = !shown[id]
-    setShown((all) => ({ ...all, [id]: next }))
-    tool.current?.setRouteShown(id, next)
+  const choose = (id: string) => {
+    setSelected(id)
+    tool.current?.setSelected(id)
+  }
+  const toggle = (id: string) => {
+    const next = !hidden[id]
+    setHidden((all) => ({ ...all, [id]: next }))
+    tool.current?.setRouteShown(id, !next)
+  }
+  const toggleReach = () => {
+    if (!start) return
+    if (reach.kind === 'on' || reach.kind === 'loading') {
+      setReach({ kind: 'off' })
+      void tool.current?.setReach(null)
+      return
+    }
+    setReach({ kind: 'loading' })
+    const abort = new AbortController()
+    fetchReach(start, abort.signal).then(
+      (result) => {
+        if (result.state === 'error') return setReach({ kind: 'error', why: result.why })
+        setReach({ kind: 'on', answer: result.answer })
+        void tool.current?.setReach({ image: result.answer.image, bounds: result.answer.bounds })
+      },
+      () => undefined,
+    )
   }
 
-  const routes = state.kind === 'ready' ? state.answer.routes : []
-  const a = routes.find((route) => route.id === 'a')
-  const b = routes.find((route) => route.id === 'b')
+  const answer = state.kind === 'ready' ? state.answer : undefined
+  const routes = answer?.routes ?? []
+  const current = routes.find((route) => route.id === selected) ?? routes[0]
   const places = [...KNOWN_PLACES, ...saved.map((waypoint) => ({ title: waypoint.name, place: { lon: waypoint.lon, lat: waypoint.lat } }))]
+  const leftOut = [...(answer?.dropped ?? []), ...(answer?.not_found ?? [])]
 
   return (
-    <ToolCard id="tool-route" title="Route" icon={<Route size={16} aria-hidden />} onClose={onClose} width="400px">
+    <ToolCard id="tool-route" title="Route" icon={<Route size={16} aria-hidden />} onClose={onClose} width="408px">
       <Box px="4" pt="3" pb="2">
         <Text fontSize="sm" color="gray.700">
-          Choose where to start and where to go. You get two walking routes to compare.
+          Choose where to start and where to go. The map creates several routes, checks them, and tells you which one is best.
         </Text>
       </Box>
 
@@ -145,8 +204,7 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
           places={places}
           onChoose={(place) => {
             setStart(place)
-            if (!goal) setPicking('goal')
-            else setPicking(null)
+            setPicking(goal ? null : 'goal')
           }}
         />
         <EndPicker
@@ -162,16 +220,47 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
             setPicking(start ? null : 'start')
           }}
         />
-        <HStack gap="2">
+        <HStack gap="2" wrap="wrap">
           <Button size="xs" variant="outline" colorPalette="brand" disabled={!start || !goal} onClick={swap}>
             <ArrowUpDown size={14} aria-hidden />
-            Swap start and goal
+            Swap
           </Button>
           <Button size="xs" variant="outline" colorPalette="brand" disabled={!start && !goal} onClick={reset}>
             <RotateCcw size={14} aria-hidden />
             Start again
           </Button>
+          <Button size="xs" variant={reach.kind === 'on' ? 'solid' : 'outline'} colorPalette="brand" disabled={!start} aria-pressed={reach.kind === 'on'} onClick={toggleReach} title="Colour the map by how long it takes to walk there from the start">
+            {reach.kind === 'loading' ? <Spinner size="xs" /> : <Timer size={14} aria-hidden />}
+            Walking-time map
+          </Button>
         </HStack>
+
+        {reach.kind === 'error' && (
+          <Text fontSize="xs" color="red.700">
+            {reach.why}
+          </Text>
+        )}
+        {reach.kind === 'on' && (
+          <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" px="3" py="2.5">
+            <Text fontSize="xs" fontWeight="700" color="gray.900">
+              Walking time from the start
+            </Text>
+            <Flex as="ul" gap="1" mt="1.5" listStyleType="none">
+              {reach.answer.legend.map((band) => (
+                <Box as="li" key={band.label} flex="1" minW="0">
+                  <Box h="8px" borderRadius="sm" bg={band.color} borderWidth="1px" borderColor="blackAlpha.300" aria-hidden />
+                  <Text fontSize="2xs" color="gray.700" mt="0.5" lineHeight="1.2">
+                    {band.label}
+                  </Text>
+                </Box>
+              ))}
+            </Flex>
+            <Text fontSize="2xs" color="gray.600" mt="1.5">
+              Each colour is how long it takes to walk there (an estimate). The farthest place takes {formatDuration(reach.answer.max_time_s)}.
+              {reach.answer.unreachable_percent >= 0.05 ? ` ${one.format(reach.answer.unreachable_percent)}% of the ground cannot be reached on foot (too steep) and has no colour.` : ''}
+            </Text>
+          </Box>
+        )}
       </VStack>
 
       <Box aria-live="polite" borderTopWidth="1px" borderColor="gray.200" bg="gray.50">
@@ -183,95 +272,131 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
         {state.kind === 'loading' && (
           <HStack gap="2.5" px="4" py="4" fontSize="sm" color="gray.700">
             <Spinner size="sm" />
-            <Text>Working out the two routes…</Text>
+            <Text>Creating routes and checking them…</Text>
           </HStack>
         )}
-        {state.kind === 'error' && (
-          <HStack align="flex-start" gap="2" m="3" p="3" borderRadius="lg" bg="red.50" borderWidth="1px" borderColor="red.200">
-            <Box flexShrink={0} mt="0.5" color="red.700">
-              <TriangleAlert size={16} aria-hidden />
-            </Box>
-            <Text fontSize="sm" color="red.900">
-              {state.why}
-            </Text>
-          </HStack>
+        {state.kind === 'error' && <Notice tone="red">{state.why}</Notice>}
+        {answer && routes.length === 0 && (
+          <Notice tone="red" title="No route found">
+            {answer.not_found?.[0]?.reason ?? 'There is no way on foot between these two points.'}
+          </Notice>
         )}
 
-        {state.kind === 'ready' && a && b && (
+        {answer && current && (
           <VStack align="stretch" gap="2.5" p="3">
-            {/* The two routes side by side */}
-            <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" overflow="hidden">
-              <Flex borderBottomWidth="1px" borderColor="gray.200">
-                <Box flex="1.15" />
-                <RouteHead route={a} shown={shown.a} onToggle={() => toggle('a')} />
-                <RouteHead route={b} shown={shown.b} onToggle={() => toggle('b')} />
-              </Flex>
-              {a.found || b.found ? (
-                <>
-                  <Line label="Distance" hint="walked on the ground" a={a.stats && formatDistance(a.stats.distance_m)} b={b.stats && formatDistance(b.stats.distance_m)} better={lower(a.stats?.distance_m, b.stats?.distance_m)} />
-                  <Line label="Walking time" hint="an estimate" a={a.stats && formatDuration(a.stats.walk_time_s)} b={b.stats && formatDuration(b.stats.walk_time_s)} better={lower(a.stats?.walk_time_s, b.stats?.walk_time_s)} />
-                  <Line label="Steepest part" a={a.stats && `${one.format(a.stats.max_slope_deg)}°`} b={b.stats && `${one.format(b.stats.max_slope_deg)}°`} better={lower(a.stats?.max_slope_deg, b.stats?.max_slope_deg)} />
-                  <Line
-                    label="Steep ground"
-                    hint={`steeper than ${state.answer.settings.steep_deg}°`}
-                    a={a.stats && `${whole.format(a.stats.steep_percent)}%`}
-                    b={b.stats && `${whole.format(b.stats.steep_percent)}%`}
-                    better={lower(a.stats?.steep_percent, b.stats?.steep_percent)}
-                  />
-                  <Line label="Climb" hint="total way up" a={a.stats && `${whole.format(a.stats.climb_m)} m`} b={b.stats && `${whole.format(b.stats.climb_m)} m`} better={lower(a.stats?.climb_m, b.stats?.climb_m)} />
-                  <Line label="Way down" a={a.stats && `${whole.format(a.stats.descent_m)} m`} b={b.stats && `${whole.format(b.stats.descent_m)} m`} />
-                  <Line label="Average slope" a={a.stats && `${one.format(a.stats.mean_slope_deg)}°`} b={b.stats && `${one.format(b.stats.mean_slope_deg)}°`} />
-                  <Line label="By rover" hint="Perseverance's top speed" a={a.stats && formatDuration(a.stats.rover_time_s)} b={b.stats && formatDuration(b.stats.rover_time_s)} last />
-                </>
-              ) : null}
-            </Box>
-
-            {[a, b].map((route) =>
-              !route.found ? (
-                <Notice key={route.id} tone="red" title={`${ROUTE_LOOK[route.id].title}: no route found`}>
-                  {route.reason ?? 'There is no way between these two points within the slope limit of this route.'}
-                </Notice>
-              ) : route.warnings.length > 0 ? (
-                <Notice key={route.id} tone="orange" title={ROUTE_LOOK[route.id].title}>
-                  {route.warnings.join(' ')}
-                </Notice>
-              ) : null,
-            )}
-
-            {(a.found || b.found) && (
-              <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" px="3.5" py="3">
-                <HStack gap="2" mb="2">
-                  <Flex flexShrink={0} align="center" justify="center" boxSize="7" borderRadius="full" bg="brand.50" color="brand.700">
-                    <Footprints size={16} aria-hidden />
-                  </Flex>
-                  <Text as="h3" fontSize="sm" fontWeight="700" color="gray.900">
-                    Up and down along the way
+            {/* The verdict */}
+            {answer.recommendation && (
+              <Box bg="brand.700" color="white" borderRadius="xl" px="3.5" py="3">
+                <HStack gap="2">
+                  <Award size={18} aria-hidden />
+                  <Text fontSize="2xs" fontWeight="700" letterSpacing="0.08em" textTransform="uppercase" color="whiteAlpha.800">
+                    Best of {routes.length} {routes.length === 1 ? 'route' : 'routes'}
                   </Text>
                 </HStack>
-                <RouteChart routes={[a, b].filter((route) => route.found)} />
+                <Text fontSize="lg" fontWeight="700" mt="1" lineHeight="1.25">
+                  {routes.find((route) => route.id === answer.recommendation!.id)?.name ?? 'Recommended route'}
+                </Text>
+                <Text fontSize="sm" color="whiteAlpha.900" mt="1">
+                  {answer.recommendation.why}
+                </Text>
               </Box>
             )}
+
+            {/* All the routes, best first. Click one to see it. */}
+            <VStack as="ul" align="stretch" gap="1.5" listStyleType="none" aria-label="Routes, best first">
+              {routes.map((route) => {
+                const chosen = route.id === current.id
+                return (
+                  <Flex as="li" key={route.id} align="stretch" bg="white" borderWidth="2px" borderColor={chosen ? 'brand.500' : 'gray.200'} borderRadius="xl" overflow="hidden">
+                    <Box w="6px" flexShrink={0} bg={routeColor(route.id)} borderRightWidth="1px" borderColor="blackAlpha.300" aria-hidden />
+                    <Box as="button" flex="1" minW="0" px="3" py="2" textAlign="left" cursor="pointer" aria-pressed={chosen} onClick={() => choose(route.id)} _hover={{ bg: 'gray.50' }} _focusVisible={{ outline: '2px solid', outlineColor: 'brand.500', outlineOffset: '-2px' }}>
+                      <HStack gap="2" wrap="wrap">
+                        <Text fontSize="sm" fontWeight="700" color="gray.900">
+                          {route.rank}. {route.name}
+                        </Text>
+                        {route.recommended && (
+                          <Text fontSize="2xs" fontWeight="700" px="1.5" py="0.5" borderRadius="full" bg="green.100" color="green.800">
+                            Best
+                          </Text>
+                        )}
+                        <Text ml="auto" fontSize="xs" fontWeight="700" color="gray.700" fontVariantNumeric="tabular-nums" title="Score from 0 to 100. Higher is better.">
+                          {whole.format(route.score)}
+                          <Text as="span" fontWeight="400" color="gray.500">
+                            {' '}
+                            / 100
+                          </Text>
+                        </Text>
+                      </HStack>
+                      {/* The score as a bar */}
+                      <Box mt="1" h="4px" borderRadius="full" bg="gray.200" aria-hidden>
+                        <Box h="full" borderRadius="full" bg={route.recommended ? 'green.500' : 'brand.400'} w={`${Math.max(4, Math.min(100, route.score))}%`} />
+                      </Box>
+                      <Text fontSize="xs" color="gray.700" mt="1.5" fontVariantNumeric="tabular-nums">
+                        {formatDuration(route.stats.walk_time_s)} · {formatDistance(route.stats.distance_m)} · steepest {one.format(route.stats.max_slope_deg)}°
+                      </Text>
+                      {(route.best_at.length > 0 || route.also.length > 0) && (
+                        <Text fontSize="2xs" color="gray.600" mt="0.5">
+                          {[...route.best_at.map((measure) => BEST_AT[measure]), ...route.also.map((name) => `same way as "${name}"`)].join(' · ')}
+                        </Text>
+                      )}
+                    </Box>
+                    <Flex align="center" pr="1.5">
+                      <IconButton aria-label={hidden[route.id] ? `Show ${route.name} on the map` : `Hide ${route.name} on the map`} aria-pressed={!hidden[route.id]} title={hidden[route.id] ? 'Show on the map' : 'Hide on the map'} size="xs" variant="ghost" color={hidden[route.id] ? 'gray.400' : 'brand.700'} onClick={() => toggle(route.id)}>
+                        {hidden[route.id] ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}
+                      </IconButton>
+                    </Flex>
+                  </Flex>
+                )
+              })}
+            </VStack>
+
+            {leftOut.length > 0 && (
+              <Text fontSize="2xs" color="gray.600" px="1">
+                Also created, but left out because they add nothing: {leftOut.map((item) => item.name).join(', ')}.
+              </Text>
+            )}
+
+            {/* The chosen route */}
+            <Card icon={<Footprints size={16} aria-hidden />} title={`${current.name}: the numbers`} tag={current.idea}>
+              <SimpleGrid columns={2} gap="2">
+                <Figure icon={<Clock size={13} aria-hidden />} label="Walking time" value={formatDuration(current.stats.walk_time_s)} note="an estimate" />
+                <Figure icon={<Route size={13} aria-hidden />} label="Distance" value={formatDistance(current.stats.distance_m)} note="walked on the ground" />
+                <Figure icon={<TrendingUp size={13} aria-hidden />} label="Steepest part" value={`${one.format(current.stats.max_slope_deg)}°`} note={`average ${one.format(current.stats.mean_slope_deg)}°`} />
+                <Figure icon={<Mountain size={13} aria-hidden />} label="Climb" value={`${whole.format(current.stats.climb_m)} m`} note={`and ${whole.format(current.stats.descent_m)} m down`} />
+              </SimpleGrid>
+              <Text fontSize="2xs" color="gray.600" mt="2">
+                By rover at Perseverance&rsquo;s top speed: {formatDuration(current.stats.rover_time_s)}.
+              </Text>
+            </Card>
+
+            <Card icon={<ShieldAlert size={16} aria-hidden />} title="Take care">
+              <Cautions route={current} sandM={sand[current.id]} sandKnown={current.id in sand} steepDeg={answer.settings.steep_deg} />
+            </Card>
+
+            <Card icon={<Waves size={16} aria-hidden />} title="Up and down along the way">
+              <RouteChart routes={routes} selected={current.id} />
+            </Card>
 
             <Box asChild bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" px="3.5" py="2.5">
               <details>
                 <Box asChild cursor="pointer" fontSize="sm" fontWeight="600" color="brand.600">
-                  <summary>How are the routes made?</summary>
+                  <summary>How are the routes made and checked?</summary>
                 </Box>
                 <VStack align="stretch" gap="1.5" mt="2" fontSize="xs" color="gray.700" lineHeight="1.5">
                   <Text>
-                    The ground of Jezero is a grid of squares, {state.answer.settings.resolution_m} m wide, each with a height from the USGS height map. The computer finds the cheapest way from square to square.
+                    <b>1. Create.</b> The ground of Jezero is a grid of squares, {answer.settings.resolution_m} m wide, each with a height from the USGS height map. The computer looks for the cheapest way from square to square, several times, each time with a different idea of &ldquo;cheap&rdquo;: least distance, least time, least steep ground, smoothest ground, and one clearly different way.
                   </Text>
                   <Text>
-                    <b>Route A</b> counts only the distance walked on the ground. It does not cross ground steeper than {state.answer.settings.route_a_max_slope_deg}°.
+                    <b>2. Check.</b> Every route is measured the same way: time, steep ground, climb, and bumpy ground with pits. Routes that are nearly the same are joined, and a route that is not better at anything is left out.
                   </Text>
                   <Text>
-                    <b>Route B</b> also pays a price for steepness that grows fast (a slope of {state.answer.settings.slope_penalty_deg}° doubles the cost of a step). It does not cross ground steeper than {state.answer.settings.route_b_max_slope_deg}°.
+                    <b>3. Score.</b> Each route gets a score from 0 to 100: time counts {whole.format(answer.weights.time * 100)}%, steep ground {whole.format(answer.weights.steep * 100)}%, climb {whole.format(answer.weights.climb * 100)}%, bumpy ground {whole.format(answer.weights.rough * 100)}%. These weights are our choice.
                   </Text>
                   <Text>
-                    <b>Walking time is an estimate.</b> It uses {state.answer.settings.walk_speed_m_s} m/s as a comfortable walking speed in Mars gravity, times {state.answer.settings.suit_factor} for the space suit, slower on slopes. The suit number and the slope rule are our assumptions.
+                    <b>Walking time is an estimate.</b> It uses {answer.settings.walk_speed_m_s} m/s as a comfortable walking speed in Mars gravity, times {answer.settings.suit_factor} for the space suit, slower on slopes. The suit number and the slope rule are our assumptions.
                   </Text>
                   <Text>
-                    <b>Route B is not &ldquo;the safe route&rdquo;.</b> Only slope is counted. Rocks, sand, dust and light are not.
+                    <b>No route is &ldquo;the safe route&rdquo;.</b> The height map has one value every {answer.settings.resolution_m} m. It cannot see rocks, small holes, dust storms or solar storms.
                   </Text>
                 </VStack>
               </details>
@@ -283,11 +408,78 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
   )
 }
 
-/** 'a' or 'b' when one number is clearly lower, else nothing. */
-function lower(a: number | undefined, b: number | undefined): 'a' | 'b' | undefined {
-  if (a === undefined || b === undefined) return undefined
-  if (Math.abs(a - b) <= Math.max(Math.abs(a), Math.abs(b)) * 0.005) return undefined
-  return a < b ? 'a' : 'b'
+/** What to take care of on one route: every line is from real data, or says it is an estimate. */
+function Cautions({ route, sandM, sandKnown, steepDeg }: { route: RouteResult; sandM: number | undefined; sandKnown: boolean; steepDeg: number }) {
+  const { stats } = route
+  const dose = walkDoseMsv(stats.walk_time_s)
+  const items: Array<{ icon: ReactNode; tone: 'red' | 'orange' | 'gray'; title: string; text: string }> = []
+
+  if (stats.steep_percent >= 0.5 || stats.max_slope_deg > steepDeg) {
+    items.push({
+      icon: <TrendingUp size={15} aria-hidden />,
+      tone: stats.max_slope_deg >= 25 ? 'red' : 'orange',
+      title: 'Steep ground',
+      text: `${whole.format(stats.steep_percent)}% of the way is steeper than ${steepDeg}°. The steepest part is ${one.format(stats.max_slope_deg)}°.`,
+    })
+  }
+  if (stats.rough_percent >= 1) {
+    items.push({ icon: <Waves size={15} aria-hidden />, tone: 'orange', title: 'Bumpy ground', text: `${whole.format(stats.rough_percent)}% of the way is on bumpy ground.` })
+  }
+  if (stats.pit_m >= 20) {
+    items.push({ icon: <TriangleAlert size={15} aria-hidden />, tone: 'orange', title: 'Pits', text: `The way crosses ${formatDistance(stats.pit_m)} of closed dips in the ground.` })
+  }
+  if (sandM !== undefined && sandM >= 20) {
+    items.push({
+      icon: <Wind size={15} aria-hidden />,
+      tone: 'orange',
+      title: 'Loose sand',
+      text: `${formatDistance(sandM)} of the way is on wind-blown sand ripples (USGS rock map). Feet and wheels sink in loose sand.`,
+    })
+  }
+  if (stats.walk_time_s > SPACEWALK_LIMIT_S) {
+    items.push({
+      icon: <Clock size={15} aria-hidden />,
+      tone: 'red',
+      title: 'Longer than one spacewalk',
+      text: `The walk takes ${formatDuration(stats.walk_time_s)}. A space suit is planned for about 8 hours outside (our assumption, from spacewalks in Earth orbit). Plan a rest stop or a rover.`,
+    })
+  }
+  // Always shown: the dose depends on the time outside, so it is part of comparing routes.
+  items.push({
+    icon: <Radiation size={15} aria-hidden />,
+    tone: 'gray',
+    title: 'Radiation',
+    text: `About ${two.format(dose)} mSv of cosmic radiation during the walk (an estimate: ${RADIATION_MSV_PER_DAY} mSv per day, measured by the Curiosity rover on Mars). It is nearly the same everywhere in Jezero, so a shorter time outside means less.`,
+  })
+
+  return (
+    <VStack as="ul" align="stretch" gap="1.5" listStyleType="none">
+      {items.map((item) => (
+        <HStack as="li" key={item.title} align="flex-start" gap="2" p="2" borderRadius="lg" bg={item.tone === 'gray' ? 'gray.50' : `${item.tone}.50`} borderWidth="1px" borderColor={item.tone === 'gray' ? 'gray.200' : `${item.tone}.200`}>
+          <Box flexShrink={0} mt="0.5" color={item.tone === 'gray' ? 'gray.700' : `${item.tone}.700`}>
+            {item.icon}
+          </Box>
+          <Box>
+            <Text fontSize="xs" fontWeight="700" color="gray.900">
+              {item.title}
+            </Text>
+            <Text fontSize="xs" color="gray.800">
+              {item.text}
+            </Text>
+          </Box>
+        </HStack>
+      ))}
+      {!sandKnown && (
+        <HStack as="li" gap="2" fontSize="xs" color="gray.600">
+          <Spinner size="xs" />
+          <Text>Checking the rock map for loose sand…</Text>
+        </HStack>
+      )}
+      <Text as="li" fontSize="2xs" color="gray.500">
+        Not in our data: rocks and holes smaller than 20 m, dust storms, wind, and solar storms. Check the Briefing for today&rsquo;s conditions.
+      </Text>
+    </VStack>
+  )
 }
 
 /** The start or the goal: where it is, a button to pick it on the map, and known places. */
@@ -324,71 +516,59 @@ function EndPicker({ which, label, icon, place, picking, onPick, places, onChoos
   )
 }
 
-/** The heading of one route's column: its colour, its name, and the eye that hides its line. */
-function RouteHead({ route, shown, onToggle }: { route: RouteResult; shown: boolean; onToggle: () => void }) {
-  const look = ROUTE_LOOK[route.id]
+function Card({ icon, title, tag, children }: { icon: ReactNode; title: string; tag?: string; children: ReactNode }) {
   return (
-    <Flex flex="1" direction="column" gap="1" px="2" py="2" borderLeftWidth="1px" borderColor="gray.200" minW="0">
-      <HStack gap="1.5">
-        <Box flexShrink={0} w="18px" h="6px" borderRadius="full" bg={look.color} borderWidth="1.5px" borderColor={route.id === 'a' ? look.color : look.edge} aria-hidden />
-        <Text fontSize="xs" fontWeight="700" color="gray.900">
-          Route {route.id.toUpperCase()}
-        </Text>
-        <IconButton ml="auto" aria-label={shown ? `Hide ${look.title} on the map` : `Show ${look.title} on the map`} aria-pressed={shown} title={shown ? 'Hide on the map' : 'Show on the map'} size="2xs" variant="ghost" color={shown ? 'brand.700' : 'gray.400'} disabled={!route.found} onClick={onToggle}>
-          {shown ? <Eye size={13} aria-hidden /> : <EyeOff size={13} aria-hidden />}
-        </IconButton>
-      </HStack>
-      <Text fontSize="xs" color="gray.700" lineHeight="1.2">
-        {route.id === 'a' ? 'Shortest' : 'Lower-slope'}
-      </Text>
-    </Flex>
-  )
-}
-
-/** One row of the comparison: a name, and the value of each route. The lower value gets a mark. */
-function Line({ label, hint, a, b, better, last }: { label: string; hint?: string; a: string | null; b: string | null; better?: 'a' | 'b'; last?: boolean }) {
-  const cell = (value: string | null, mine: 'a' | 'b') => (
-    <Flex flex="1" align="center" px="2" py="1.5" borderLeftWidth="1px" borderColor="gray.200" bg={better === mine ? 'green.50' : undefined} minW="0">
-      <Text fontSize="sm" fontWeight="700" color={value ? 'gray.900' : 'gray.400'} fontVariantNumeric="tabular-nums">
-        {value ?? '–'}
-        {better === mine && (
-          <Text as="span" srOnly>
-            {' '}
-            (lower)
-          </Text>
-        )}
-      </Text>
-    </Flex>
-  )
-  return (
-    <Flex borderBottomWidth={last ? 0 : '1px'} borderColor="gray.100">
-      <Box flex="1.15" px="3" py="1.5" minW="0">
-        <Text fontSize="xs" fontWeight="600" color="gray.800" lineHeight="1.25">
-          {label}
-        </Text>
-        {hint && (
-          <Text fontSize="2xs" color="gray.500" lineHeight="1.2">
-            {hint}
-          </Text>
-        )}
-      </Box>
-      {cell(a, 'a')}
-      {cell(b, 'b')}
-    </Flex>
-  )
-}
-
-function Notice({ tone, title, children }: { tone: 'red' | 'orange'; title: string; children: ReactNode }) {
-  return (
-    <HStack align="flex-start" gap="2" p="2.5" borderRadius="lg" bg={`${tone}.50`} borderWidth="1px" borderColor={`${tone}.200`}>
-      <Box flexShrink={0} mt="0.5" color={`${tone}.700`}>
-        <TriangleAlert size={15} aria-hidden />
-      </Box>
-      <Box>
-        <Text fontSize="xs" fontWeight="700" color={`${tone}.900`}>
+    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" px="3.5" py="3">
+      <HStack gap="2" mb={tag ? '0.5' : '2'}>
+        <Flex flexShrink={0} align="center" justify="center" boxSize="7" borderRadius="full" bg="brand.50" color="brand.700">
+          {icon}
+        </Flex>
+        <Text as="h3" fontSize="sm" fontWeight="700" color="gray.900">
           {title}
         </Text>
-        <Text fontSize="xs" color={`${tone}.900`}>
+      </HStack>
+      {tag && (
+        <Text fontSize="xs" color="gray.600" mb="2" pl="9">
+          {tag}
+        </Text>
+      )}
+      {children}
+    </Box>
+  )
+}
+
+function Figure({ icon, label, value, note }: { icon: ReactNode; label: string; value: string; note: string }) {
+  return (
+    <Box borderWidth="1px" borderColor="gray.200" borderRadius="lg" px="2.5" py="2">
+      <HStack gap="1" color="gray.600">
+        {icon}
+        <Text fontSize="xs" fontWeight="600">
+          {label}
+        </Text>
+      </HStack>
+      <Text fontSize="lg" fontWeight="700" color="gray.900" lineHeight="1.25" fontVariantNumeric="tabular-nums">
+        {value}
+      </Text>
+      <Text fontSize="2xs" color="gray.500">
+        {note}
+      </Text>
+    </Box>
+  )
+}
+
+function Notice({ tone, title, children }: { tone: 'red' | 'orange'; title?: string; children: ReactNode }) {
+  return (
+    <HStack align="flex-start" gap="2" m="3" p="3" borderRadius="lg" bg={`${tone}.50`} borderWidth="1px" borderColor={`${tone}.200`}>
+      <Box flexShrink={0} mt="0.5" color={`${tone}.700`}>
+        <TriangleAlert size={16} aria-hidden />
+      </Box>
+      <Box>
+        {title && (
+          <Text fontSize="sm" fontWeight="700" color={`${tone}.900`}>
+            {title}
+          </Text>
+        )}
+        <Text fontSize="sm" color={`${tone}.900`}>
           {children}
         </Text>
       </Box>
@@ -396,8 +576,8 @@ function Notice({ tone, title, children }: { tone: 'red' | 'orange'; title: stri
   )
 }
 
-/** The height along each route, from start to goal. Both routes share the two scales. */
-function RouteChart({ routes }: { routes: RouteResult[] }) {
+/** The height along every route, from start to goal. The chosen route is drawn thick. */
+function RouteChart({ routes, selected }: { routes: RouteResult[]; selected: string }) {
   const W = 340
   const H = 130
   const PAD = { left: 6, right: 6, top: 8, bottom: 8 }
@@ -420,13 +600,14 @@ function RouteChart({ routes }: { routes: RouteResult[] }) {
     return `M${parts.join(' L')}`
   }
   const stretch = Math.max(1, longest / (W - PAD.left - PAD.right) / (span / (H - PAD.top - PAD.bottom)))
+  // The chosen route last, so it is drawn on top.
+  const ordered = [...routes].sort((a, b) => Number(a.id === selected) - Number(b.id === selected))
 
   return (
     <Box>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`Height along the routes, from ${whole.format(low)} to ${whole.format(high)} metres.`} style={{ display: 'block', borderRadius: 8, background: '#3a2a22' }}>
-        {/* Route B first, so route A is drawn on top where they share the way. */}
-        {[...routes].reverse().map((route) => (
-          <path key={route.id} d={path(route)} fill="none" stroke={ROUTE_LOOK[route.id].color} strokeWidth={route.id === 'a' ? 2.2 : 2.6} strokeLinejoin="round" strokeLinecap="round" />
+        {ordered.map((route) => (
+          <path key={route.id} d={path(route)} fill="none" stroke={routeColor(route.id)} strokeWidth={route.id === selected ? 3 : 1.5} opacity={route.id === selected ? 1 : 0.6} strokeLinejoin="round" strokeLinecap="round" />
         ))}
       </svg>
       <Flex justify="space-between" fontSize="xs" color="gray.600" mt="1">
@@ -436,16 +617,16 @@ function RouteChart({ routes }: { routes: RouteResult[] }) {
         </Text>
         <Text>{formatDistance(longest)}</Text>
       </Flex>
-      <HStack gap="4" mt="1.5" fontSize="xs" color="gray.700">
+      <Flex as="ul" gap="3" rowGap="1" wrap="wrap" mt="1.5" fontSize="xs" color="gray.700" listStyleType="none">
         {routes.map((route) => (
-          <HStack key={route.id} gap="1.5">
+          <HStack as="li" key={route.id} gap="1.5">
             <Flex align="center" justify="center" w="22px" h="12px" borderRadius="3px" bg="#3a2a22" aria-hidden>
-              <Box w="16px" borderTopWidth="2.5px" borderColor={ROUTE_LOOK[route.id].color} />
+              <Box w="16px" borderTopWidth={route.id === selected ? '3px' : '2px'} borderColor={routeColor(route.id)} />
             </Flex>
-            <Text>{ROUTE_LOOK[route.id].short}</Text>
+            <Text fontWeight={route.id === selected ? '700' : '400'}>{route.name}</Text>
           </HStack>
         ))}
-      </HStack>
+      </Flex>
       <Text fontSize="2xs" color="gray.500" mt="1">
         Heights are drawn {whole.format(stretch)}× taller than real, so the hills are easy to see.
       </Text>

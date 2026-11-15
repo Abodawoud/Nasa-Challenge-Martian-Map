@@ -3,7 +3,12 @@
 M0: health check.
 M3: the Jezero elevation grid (DEM). Info about it, and elevation and slope of a point.
 M4: two walking routes between two points (see PLAN.md section 8 and app/routing.py).
+Then: several candidate routes that are measured, scored and ranked (app/candidates.py),
+and the walking-time map from one point (app/reach.py).
 """
+
+import threading
+import time
 
 from contextlib import asynccontextmanager
 from typing import Any
@@ -11,17 +16,34 @@ from typing import Any
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 
-from . import dem, routing
+from . import candidates, dem, reach, routing, terrain
 
 # The west to east cut through a picked point: this far to each side, one height every step.
 PROFILE_HALF_WIDTH_M = 500
 PROFILE_STEP_M = 25
 
 
+def _warm_up() -> None:
+    """Work out slope, roughness and pits as soon as the grid is loaded.
+
+    This takes about 2 seconds. Without it the first request to /api/routes would wait for it.
+    """
+    while True:
+        status, _error = dem.store.status()
+        grid = dem.store.grid()
+        if grid is not None:
+            terrain.cached_ground_facts(grid)
+            return
+        if status == "error":
+            return
+        time.sleep(0.5)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Start the DEM download and load in the background when the app starts."""
     dem.store.start_loading()
+    threading.Thread(target=_warm_up, name="ground-facts", daemon=True).start()
     yield
 
 
@@ -115,6 +137,66 @@ def route(
         if exc.code == "outside":
             content["bounds"] = [round(v, 6) for v in grid.bounds_deg()]
         return JSONResponse(status_code=422, content=content)
+
+
+def _route_error(grid: dem.DemGrid, exc: routing.RouteError) -> JSONResponse:
+    """The HTTP 422 answer for a point outside the grid or two points in the same cell."""
+    content: dict[str, Any] = {"code": exc.code, "detail": exc.detail}
+    if exc.code == "outside":
+        content["bounds"] = [round(v, 6) for v in grid.bounds_deg()]
+    return JSONResponse(status_code=422, content=content)
+
+
+@app.get("/api/routes")
+def routes(
+    from_lon: float = Query(..., ge=-180.0, le=360.0, description="Start longitude in degrees, east-positive."),
+    from_lat: float = Query(..., ge=-90.0, le=90.0, description="Start latitude in degrees, planetocentric."),
+    to_lon: float = Query(..., ge=-180.0, le=360.0, description="End longitude in degrees, east-positive."),
+    to_lat: float = Query(..., ge=-90.0, le=90.0, description="End latitude in degrees, planetocentric."),
+) -> Any:
+    """Several candidate routes between two points, measured, scored and ranked.
+
+    Six candidates are searched: Shortest, Fastest, Lower-slope, Flattest, Smooth ground, Another way.
+    'routes' holds the ones worth showing, sorted by rank. Rank 1 is 'recommended'.
+    'not_found' lists the candidates with no way. 'dropped' lists the ones that were not worth showing.
+    A candidate that is almost the same as an earlier one is named in the 'also' list of that one.
+    The score weights are our choice. They are in 'weights'. The other numbers are in 'settings'.
+    If no candidate is found: 'routes' is empty and 'recommendation' is null, with HTTP 200.
+
+    The errors are the same as for /api/route (HTTP 422 and HTTP 503).
+    """
+    dem.store.start_loading()
+    grid = dem.store.grid()
+    if grid is None:
+        return _dem_not_ready()
+    try:
+        return candidates.compute_candidates(grid, from_lon, from_lat, to_lon, to_lat)
+    except routing.RouteError as exc:
+        return _route_error(grid, exc)
+
+
+@app.get("/api/reach")
+def reach_map(
+    lon: float = Query(..., ge=-180.0, le=360.0, description="Start longitude in degrees, east-positive."),
+    lat: float = Query(..., ge=-90.0, le=90.0, description="Start latitude in degrees, planetocentric."),
+) -> Any:
+    """The walking-time map: the estimated walking time from one point to every cell of the grid.
+
+    'image' is a PNG picture (a data URL) of the whole grid at half resolution, north at the top.
+    Each time band has one colour (see 'legend'). Cells with no way are clear.
+    The times are an estimate. They use the steepness of each cell both ways.
+
+    HTTP 422 with 'code: outside' if the point is outside the grid or on a cell with no data.
+    HTTP 503 with a JSON body while the grid is still loading, or if loading failed.
+    """
+    dem.store.start_loading()
+    grid = dem.store.grid()
+    if grid is None:
+        return _dem_not_ready()
+    try:
+        return reach.compute_reach(grid, lon, lat)
+    except routing.RouteError as exc:
+        return _route_error(grid, exc)
 
 
 @app.get("/api/point")
