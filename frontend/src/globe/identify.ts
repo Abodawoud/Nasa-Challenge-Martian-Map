@@ -12,7 +12,8 @@ import * as Cesium from 'cesium'
 import { ROCK_UNITS_SOURCE, ROCK_UNIT_INFO } from './layers.config'
 import { geologyAt, geologyBounds } from './geologyLayer'
 import { loadRoverPath, nearestDrive } from './pathLayer'
-import { drawPosition, pickPlace, toolInput } from './mapTools'
+import { PERSEVERANCE_LANDING } from './mars'
+import { drawPosition, pickPlace, toolCursor, toolInput } from './mapTools'
 import type { LonLat } from './mapTools'
 
 // ------------------------------------------------------------------ the facts
@@ -25,31 +26,74 @@ export interface GroundFact {
   slopeDeg: number | null
   resolutionM: number
   source: string
+  /** Lowest and highest height of the whole height map (Jezero), for the scale chart. */
+  areaMinM: number
+  areaMaxM: number
+  /** A cut through the ground from west to east through the place. */
+  profile: { halfWidthM: number; stepM: number; heightsM: Array<number | null> }
+}
+
+interface PointAnswer {
+  inside: boolean
+  elevation_m?: number | null
+  slope_deg?: number | null
+  resolution_m?: number
+  source?: string
+  area_min_m?: number
+  area_max_m?: number
+  profile?: { half_width_m: number; step_m: number; heights_m: Array<number | null> }
 }
 
 /** Height and slope from the backend (`/api/point`). */
-export async function groundAt(place: LonLat, signal: AbortSignal): Promise<Fact<GroundFact>> {
+export async function groundAt(place: LonLat, signal?: AbortSignal): Promise<Fact<GroundFact>> {
   try {
     const response = await fetch(`/api/point?lon=${place.lon.toFixed(6)}&lat=${place.lat.toFixed(6)}`, { signal })
     if (response.status === 503) return { state: 'error', why: 'The height map is still loading on the server. Click again in a few seconds.' }
     if (!response.ok) return { state: 'error', why: `The server answered ${response.status}.` }
-    const data = (await response.json()) as { inside: boolean; elevation_m?: number | null; slope_deg?: number | null; resolution_m?: number; source?: string }
+    const data = (await response.json()) as PointAnswer
     if (!data.inside || data.elevation_m === undefined || data.elevation_m === null) {
       return { state: 'none', why: 'No height data here. Our height map covers Jezero Crater only.' }
     }
-    return { state: 'ready', value: { elevationM: data.elevation_m, slopeDeg: data.slope_deg ?? null, resolutionM: data.resolution_m ?? 20, source: data.source ?? 'USGS' } }
+    return {
+      state: 'ready',
+      value: {
+        elevationM: data.elevation_m,
+        slopeDeg: data.slope_deg ?? null,
+        resolutionM: data.resolution_m ?? 20,
+        source: data.source ?? 'USGS',
+        areaMinM: data.area_min_m ?? data.elevation_m,
+        areaMaxM: data.area_max_m ?? data.elevation_m,
+        profile: { halfWidthM: data.profile?.half_width_m ?? 0, stepM: data.profile?.step_m ?? 0, heightsM: data.profile?.heights_m ?? [] },
+      },
+    }
   } catch (error) {
-    if (signal.aborted) throw error
+    if (signal?.aborted) throw error
     return { state: 'error', why: 'The server could not be reached.' }
   }
 }
 
-/** Our words for a slope. They only describe the angle: they are not a safety rating. */
+let landingHeight: Promise<number | undefined> | undefined
+
+/** The height of the Perseverance landing site from the same height map, asked once. */
+export function landingSiteHeightM(): Promise<number | undefined> {
+  landingHeight ??= groundAt({ lon: PERSEVERANCE_LANDING.lon, lat: PERSEVERANCE_LANDING.lat }).then((fact) => {
+    if (fact.state !== 'ready') landingHeight = undefined // try again next time
+    return fact.state === 'ready' ? fact.value.elevationM : undefined
+  })
+  return landingHeight
+}
+
+/** The slope bands of the chart. Our own bands: they describe the angle, they are not a safety rating. */
+export const SLOPE_BANDS: Array<{ upTo: number; word: string; color: string }> = [
+  { upTo: 5, word: 'Nearly flat', color: '#2f9e6b' },
+  { upTo: 15, word: 'Gentle to moderate', color: '#d9b530' },
+  { upTo: 25, word: 'Steep', color: '#e07b2a' },
+  { upTo: 40, word: 'Very steep', color: '#c8321f' },
+]
+
+/** Our word for a slope, from SLOPE_BANDS. */
 export function slopeWord(degrees: number): string {
-  if (degrees < 5) return 'Nearly flat'
-  if (degrees < 15) return 'Gentle to moderate'
-  if (degrees < 25) return 'Steep'
-  return 'Very steep'
+  return (SLOPE_BANDS.find((band) => degrees < band.upTo) ?? SLOPE_BANDS[SLOPE_BANDS.length - 1]).word
 }
 
 export interface RockFact {
@@ -78,6 +122,8 @@ export interface RoverPhoto {
   small: string
   large: string
   caption: string
+  /** "Mastcam-Z (colour)" or "Navigation camera". */
+  camera: string
 }
 
 export interface RoverFact {
@@ -89,6 +135,39 @@ export interface RoverFact {
 
 /** Photos are shown only when the rover drove this near to the place (metres). */
 export const PHOTO_RANGE_M = 300
+
+interface FeedImage {
+  image_files?: { small?: string; large?: string }
+  caption?: string
+  sample_type?: string
+  extended?: { mastEl?: string }
+}
+
+/**
+ * Photos of one camera on one sol, from NASA's public feed of raw rover photos
+ * (the data behind https://mars.nasa.gov/mars2020/multimedia/raw-images/).
+ */
+async function cameraPhotos(sol: number, instrument: string, camera: string, keep: number, signal: AbortSignal): Promise<RoverPhoto[]> {
+  const url = `https://mars.nasa.gov/rss/api/?feed=raw_images&category=mars2020&feedtype=json&sol=${sol}&num=50&page=0&order=sol+desc&search=%7C${instrument}`
+  try {
+    const response = await fetch(url, { signal })
+    const feed = (await response.json()) as { images?: FeedImage[] }
+    const usable = (feed.images ?? []).filter(
+      // Full pictures only (no small thumbnails), and only where the camera looked level or
+      // down: the feed also holds photos of the sky and the sun (mast elevation above 5 degrees).
+      (image) => image.image_files?.small && image.image_files.large && image.sample_type === 'Full' && Number(image.extended?.mastEl ?? 0) <= 5,
+    )
+    // Spread the choice over the sol, so the photos are not four frames of the same view.
+    const step = Math.max(1, Math.floor(usable.length / keep))
+    return usable
+      .filter((_, i) => i % step === 0)
+      .slice(0, keep)
+      .map((image) => ({ small: image.image_files!.small!, large: image.image_files!.large!, caption: (image.caption ?? '').replace(/\s+/g, ' ').trim(), camera }))
+  } catch (error) {
+    if (signal.aborted) throw error
+    return [] // no photos from this camera: the other facts are still true
+  }
+}
 
 /** The nearest drive of the rover, and photos from that Mars day when it is near. */
 export async function roverAt(place: LonLat, signal: AbortSignal): Promise<Fact<RoverFact>> {
@@ -102,24 +181,13 @@ export async function roverAt(place: LonLat, signal: AbortSignal): Promise<Fact<
     const { sol, distanceM } = nearestDrive(path, place.lon, place.lat)
     let photos: RoverPhoto[] = []
     if (distanceM <= PHOTO_RANGE_M) {
-      // NASA's public feed of raw rover photos. Navigation camera: it looks at the ground around the rover.
-      const url = `https://mars.nasa.gov/rss/api/?feed=raw_images&category=mars2020&feedtype=json&sol=${sol}&num=50&page=0&order=sol+desc&search=%7CNAVCAM_LEFT`
-      try {
-        const response = await fetch(url, { signal })
-        const feed = (await response.json()) as {
-          images?: Array<{ image_files?: { small?: string; large?: string }; caption?: string; extended?: { mastEl?: string } }>
-        }
-        // The feed answers with every navigation-camera photo of the sol, also ones of the sky
-        // and the sun (seen on 2026-11-15: 51 photos, the first ones of the sky). Keep photos
-        // where the camera looked level or down (mast elevation at most 5 degrees), a few of them.
-        photos = (feed.images ?? [])
-          .filter((image) => image.image_files?.small && image.image_files.large && Number(image.extended?.mastEl ?? 90) <= 5)
-          .slice(0, 4)
-          .map((image) => ({ small: image.image_files!.small!, large: image.image_files!.large!, caption: (image.caption ?? '').split('\n')[0] }))
-      } catch (error) {
-        if (signal.aborted) throw error
-        // No photos is not an error of the whole fact: the distance is still true.
-      }
+      // Colour photos first (Mastcam-Z, the rover's main colour camera), then the grey
+      // navigation camera, which looks at the ground around the rover.
+      const [colour, navigation] = await Promise.all([
+        cameraPhotos(sol, 'MCZ_LEFT', 'Mastcam-Z (colour)', 6, signal),
+        cameraPhotos(sol, 'NAVCAM_LEFT', 'Navigation camera', 4, signal),
+      ])
+      photos = [...colour, ...navigation]
     }
     return { state: 'ready', value: { sol, distanceM, photos } }
   } catch (error) {
@@ -215,7 +283,7 @@ export class IdentifyTool {
 
   setActive(active: boolean) {
     this.active = active
-    toolInput.cursor = active ? 'crosshair' : ''
+    toolInput.cursor = active ? toolCursor('identify') : ''
     this.viewer.scene.canvas.style.cursor = toolInput.cursor
   }
 

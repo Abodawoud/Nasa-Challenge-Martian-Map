@@ -20,6 +20,28 @@ export const toolInput = {
   cursor: '',
 }
 
+/**
+ * The mouse cursor of a map tool: an arrow (the Lucide "mouse-pointer-2" shape) with a small
+ * round badge that says what a click will do. The tip of the arrow is the exact spot.
+ *   measure   a ruler line with two end marks
+ *   identify  the letter i
+ * If the browser cannot show it, the plain crosshair is used.
+ */
+export function toolCursor(kind: 'measure' | 'identify'): string {
+  const badge =
+    kind === 'measure'
+      ? '<path d="M18.2 23h9.6M18.2 20.2v5.6M27.8 20.2v5.6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>'
+      : '<circle cx="23" cy="19.4" r="1.25" fill="#fff"/><path d="M23 22.4v4.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>'
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">' +
+    // The arrow: white with a navy edge, readable on bright and on dark ground.
+    '<path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z" fill="#fff" stroke="#0c1a3d" stroke-width="1.6" stroke-linejoin="round"/>' +
+    '<circle cx="23" cy="23" r="8" fill="#0c1a3d" stroke="#fff" stroke-width="1.5"/>' +
+    badge +
+    '</svg>'
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 4 4, crosshair`
+}
+
 /** The place on the ground under a screen position, in 2D and 3D. */
 export function pickPlace(viewer: Cesium.Viewer, position: Cesium.Cartesian2): LonLat | undefined {
   const { scene, camera } = viewer

@@ -244,6 +244,38 @@ class DemGrid:
         return horn_slope_deg(window, ground_x_m, self.cell_y_m)
 
 
+_range_cache: dict[int, tuple[float, float]] = {}
+
+
+def height_range(grid: DemGrid) -> tuple[float, float]:
+    """Lowest and highest height of the whole grid, in metres. Worked out once per grid."""
+    key = id(grid)
+    if key not in _range_cache:
+        _range_cache.clear()
+        _range_cache[key] = (float(np.nanmin(grid.heights)), float(np.nanmax(grid.heights)))
+    return _range_cache[key]
+
+
+def west_east_profile(
+    grid: DemGrid, lon_deg: float, lat_deg: float, half_width_m: float, step_m: float
+) -> list[float | None]:
+    """Heights along a west to east line through a point.
+
+    The line is 'half_width_m' long to each side, with one height every 'step_m' metres on the ground.
+    The list goes from west to east. The middle value is the point itself.
+    A value is None where the line is outside the grid or on a cell with no data.
+
+    Ground distance: one degree of longitude is 'radius * cos(lat)' metres per radian on the ground.
+    """
+    steps = int(round(half_width_m / step_m))
+    metres_per_degree = math.radians(1.0) * grid.radius_m * math.cos(math.radians(lat_deg))
+    heights: list[float | None] = []
+    for i in range(-steps, steps + 1):
+        value = grid.elevation(lon_deg + (i * step_m) / metres_per_degree, lat_deg)
+        heights.append(None if value is None else round(value, 1))
+    return heights
+
+
 # ---------------------------------------------------------------------------
 # Download and load
 # ---------------------------------------------------------------------------

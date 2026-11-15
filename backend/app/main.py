@@ -13,6 +13,10 @@ from fastapi.responses import JSONResponse
 
 from . import dem
 
+# The west to east cut through a picked point: this far to each side, one height every step.
+PROFILE_HALF_WIDTH_M = 500
+PROFILE_STEP_M = 25
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -77,6 +81,7 @@ def point(
     Answers 'inside: false' with no numbers if the point is outside the grid or on a cell with no data.
     Answers HTTP 503 with a JSON body while the grid is still loading, or if loading failed.
     'slope_deg' can be null on the outer border of the grid, where the 3x3 window is not complete.
+    Also gives the lowest and highest height of the grid, and a 1 km west to east cut through the point.
     """
     dem.store.start_loading()
     status, error = dem.store.status()
@@ -111,4 +116,18 @@ def point(
     answer["inside"] = True
     answer["elevation_m"] = round(elevation, 1)
     answer["slope_deg"] = None if slope is None else round(slope, 1)
+
+    # For the small charts in the Identify panel.
+    # 1. The lowest and highest height of the whole grid, so the point can be placed between them.
+    low, high = dem.height_range(grid)
+    answer["area_min_m"] = round(low, 1)
+    answer["area_max_m"] = round(high, 1)
+    # 2. A cut through the ground from west to east through the point.
+    #    'heights_m' go from west to east. A value is null where the cut leaves the grid.
+    answer["profile"] = {
+        "direction": "west to east",
+        "half_width_m": PROFILE_HALF_WIDTH_M,
+        "step_m": PROFILE_STEP_M,
+        "heights_m": dem.west_east_profile(grid, grid_lon, lat, PROFILE_HALF_WIDTH_M, PROFILE_STEP_M),
+    }
     return answer

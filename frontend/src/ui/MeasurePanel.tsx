@@ -2,13 +2,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type * as Cesium from 'cesium'
 import { Box, Button, Flex, HStack, IconButton, Text, VStack } from '@chakra-ui/react'
-import { Ruler, Trash2, Undo2 } from 'lucide-react'
+import { Check, Ruler, Trash2, Undo2 } from 'lucide-react'
 import { MeasureTool } from '../globe/measure'
 import type { Measurement } from '../globe/measure'
 import { formatDistance, formatPlace } from '../globe/mapTools'
 import { ToolCard } from './Sidebar'
 
-const EMPTY: Measurement = { points: [], segments: [], totalM: 0 }
+const EMPTY: Measurement = { points: [], segments: [], totalM: 0, finished: false }
 
 interface Props {
   viewer: Cesium.Viewer | null
@@ -37,13 +37,13 @@ export function MeasurePanel({ viewer, open, onClose }: Props) {
   }, [open, viewer])
 
   if (!open) return null
-  const { points, segments, totalM } = measurement
+  const { points, segments, totalM, finished } = measurement
 
   return (
     <ToolCard id="tool-measure" title="Measure" icon={<Ruler size={16} aria-hidden />} onClose={onClose}>
       <Box px="4" py="3" borderBottomWidth="1px" borderColor="gray.100">
         <Text fontSize="xs" color="gray.700">
-          <b>Click</b> to add points. <b>Double click</b> or <b>Esc</b> to finish. <b>Drag</b> a point to move it, <b>right click</b> it to delete it. Drag the ground to move the map.
+          <b>Click</b> to add points. <b>Double click</b> (or Esc, Enter, or a click on the last point) to finish. <b>Drag</b> a point to move it, <b>right click</b> it to delete it. <b>Backspace</b> removes the last point.
         </Text>
       </Box>
 
@@ -84,9 +84,16 @@ export function MeasurePanel({ viewer, open, onClose }: Props) {
 
       <Box px="4" py="3" borderTopWidth="1px" borderColor="gray.200" bg="brand.50" aria-live="polite">
         <HStack justify="space-between">
-          <Text fontSize="sm" fontWeight="600" color="brand.700">
-            Total distance
-          </Text>
+          <HStack gap="2">
+            <Text fontSize="sm" fontWeight="600" color="brand.700">
+              Total distance
+            </Text>
+            {points.length > 1 && (
+              <Text fontSize="2xs" fontWeight="700" px="1.5" py="0.5" borderRadius="full" bg={finished ? 'green.100' : 'orange.100'} color={finished ? 'green.800' : 'orange.800'}>
+                {finished ? 'Finished' : 'Drawing…'}
+              </Text>
+            )}
+          </HStack>
           <Text fontSize="lg" fontWeight="700" color="brand.700" fontVariantNumeric="tabular-nums">
             {points.length > 1 ? formatDistance(totalM) : '–'}
           </Text>
@@ -96,10 +103,16 @@ export function MeasurePanel({ viewer, open, onClose }: Props) {
         </Text>
       </Box>
 
-      <HStack px="4" py="3" gap="2" borderTopWidth="1px" borderColor="gray.100">
+      <HStack px="4" py="3" gap="2" wrap="wrap" borderTopWidth="1px" borderColor="gray.100">
+        {!finished && points.length > 1 && (
+          <Button size="xs" colorPalette="brand" onClick={() => tool.current?.finish()}>
+            <Check size={14} aria-hidden />
+            Finish
+          </Button>
+        )}
         <Button size="xs" variant="outline" colorPalette="brand" disabled={points.length === 0} onClick={() => tool.current?.removeLast()}>
           <Undo2 size={14} aria-hidden />
-          Remove last point
+          Undo point
         </Button>
         <Button size="xs" variant="outline" colorPalette="red" disabled={points.length === 0} onClick={() => tool.current?.clear()}>
           <Trash2 size={14} aria-hidden />
