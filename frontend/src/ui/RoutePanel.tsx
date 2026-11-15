@@ -50,6 +50,11 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
   const tool = useRef<RouteTool | null>(null)
   const [start, setStart] = useState<LonLat | null>(null)
   const [goal, setGoal] = useState<LonLat | null>(null)
+  // The newest goal, for the map's click handler (it is made once and would see an old value).
+  const goalRef = useRef<LonLat | null>(null)
+  useEffect(() => {
+    goalRef.current = goal
+  }, [goal])
   /** Which point the next click on the map sets. */
   const [picking, setPicking] = useState<'start' | 'goal' | null>('start')
   const [state, setState] = useState<State>({ kind: 'idle' })
@@ -76,7 +81,7 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
       if (which === 'start') {
         setStart(place)
         // After the start, the next click sets the goal, unless there is one already.
-        setPicking((now) => (now === 'start' ? 'goal' : now))
+        setPicking(goalRef.current ? null : 'goal')
       } else {
         setGoal(place)
         setPicking(null)
@@ -104,11 +109,6 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
   useEffect(() => {
     tool.current?.setPicking(open ? picking : null)
   }, [picking, open, viewer])
-
-  // After the start is set, do not ask for a goal again when there is one.
-  useEffect(() => {
-    if (picking === 'goal' && goal && start) setPicking(null)
-  }, [picking, goal, start])
 
   useEffect(() => {
     tool.current?.setEnds(start, goal)
