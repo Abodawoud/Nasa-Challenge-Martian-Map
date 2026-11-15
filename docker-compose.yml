@@ -1,6 +1,7 @@
 # Start everything:  docker compose up --build
 # Screen:            http://localhost:5173
 # Backend docs:      http://localhost:8000/docs
+# Public link:       see the "web" and "tunnel" services at the end of this file
 services:
   be:
     build: ./backend
@@ -23,6 +24,34 @@ services:
       - /app/node_modules                 # keep the container's own node_modules
     depends_on:
       - be
+
+  # ---- A public link, served from this computer (only started when asked for) ----
+  #   docker compose --profile share up -d --build web tunnel
+  #   docker compose logs tunnel        <- the https://....trycloudflare.com address is in here
+  #   docker compose --profile share down
+  # "web" builds the app and serves the finished files (not the development server).
+  # "tunnel" is Cloudflare's own tool: it gives this computer a public https address for as
+  # long as it runs. No account is needed. The address changes every time it starts.
+  web:
+    build: ./frontend
+    profiles: ["share"]
+    command: sh -c "npm run build && npx vite preview --host 0.0.0.0 --port 4173"
+    ports:
+      - "${WEB_PORT:-4173}:4173"
+    environment:
+      - API_URL=http://be:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - be
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["share"]
+    command: tunnel --no-autoupdate --url http://web:4173
+    depends_on:
+      - web
 
 volumes:
   dem-cache:

@@ -157,7 +157,7 @@ flowchart LR
 | M4 | Routes | ✅ Done, and more than planned (decision D14b) |
 | M5 | Comparison | ✅ Done: numbers, height chart, warnings, explanation, travel time, choosing a destination |
 | M6 | Style | ❌ Not built: contour lines, slope colours on the ground, swipe compare |
-| M7 | Finish | ⚠️ Partly. The code is on GitHub. Still open: a public link for the judges, a demo script, a short video or slides |
+| M7 | Finish | ⚠️ Partly. The code is on GitHub. A public link works from the developer's computer through a Cloudflare tunnel (`docker compose --profile share`, see the README): the address changes at every start and it is up only while that computer runs. Still open: a demo script, a short video or slides |
 
 ### 0.9 Built, but not in the first plan
 

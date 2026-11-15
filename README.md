@@ -39,6 +39,23 @@ Code changes show up live: the frontend reloads in the browser, and the backend 
 
 No data is stored in this project. All images and 3D ground are loaded live from NASA services, so an internet connection is needed.
 
+### A public link from this computer
+
+To let other people open the app, start two more services. Your computer is the host: the link works while it is on and Docker is running.
+
+```bash
+docker compose --profile share up -d --build web tunnel
+docker compose logs tunnel        # the https://....trycloudflare.com address is in here
+docker compose --profile share down   # stop sharing
+```
+
+| Service | What it does |
+|---|---|
+| `web` | Builds the app and serves the finished files on http://localhost:4173. It is not the development server, so no source code is handed out |
+| `tunnel` | Cloudflare's own tool (`cloudflared`). It gives this computer a public https address. No account is needed |
+
+Things to know: the address is new every time the tunnel starts. Cloudflare gives no promise that a tunnel without an account stays up, and using it means you accept Cloudflare's terms. Anyone with the link can use the app and the route calculations, which run on this computer.
+
 ---
 
 ## The landing page

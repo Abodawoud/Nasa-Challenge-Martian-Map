@@ -31,4 +31,15 @@ export default defineConfig({
       '/api': { target: apiTarget, changeOrigin: true },
     },
   },
+  // "vite preview" serves the built app (the dist folder). The public link uses it, not the
+  // development server: it only hands out the finished files, never the source code.
+  preview: {
+    host: true,
+    port: 4173,
+    // The public link is a Cloudflare quick tunnel. Its address ends in trycloudflare.com.
+    allowedHosts: ['.trycloudflare.com'],
+    proxy: {
+      '/api': { target: apiTarget, changeOrigin: true },
+    },
+  },
 })
