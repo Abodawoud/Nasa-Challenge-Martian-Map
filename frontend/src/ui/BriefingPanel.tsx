@@ -372,42 +372,65 @@ function DayBar({ sunrise, sunset }: { sunrise: string; sunset: string }) {
   )
 }
 
-/** The coldest and warmest air temperature of the last sols in the feed, as bars. */
+/**
+ * The coldest and warmest air temperature of the last readings, one row per Mars day.
+ * Every row has the same scale, so the bars can be compared: the left end of a bar is the
+ * night, the right end is the day, and both numbers are written beside it.
+ */
 function TempChart({ sols }: { sols: WeatherSol[] }) {
-  const shown = sols.filter((sol) => sol.minTempC !== null && sol.maxTempC !== null).slice(-7)
+  const shown = sols
+    .filter((sol) => sol.minTempC !== null && sol.maxTempC !== null)
+    .slice(-5)
+    .reverse() // newest first
   if (shown.length < 2) return null
-  const low = Math.min(...shown.map((sol) => sol.minTempC!))
-  const high = Math.max(...shown.map((sol) => sol.maxTempC!))
-  const W = 360
-  const H = 132
-  const top = 18
-  const bottom = 40
-  const y = (temp: number) => top + (H - top - bottom) * (1 - (temp - low) / (high - low || 1))
-  const slot = W / shown.length
+  // One scale for all rows, with a little room at both ends.
+  const low = Math.floor((Math.min(...shown.map((sol) => sol.minTempC!)) - 4) / 10) * 10
+  const high = Math.ceil((Math.max(...shown.map((sol) => sol.maxTempC!)) + 4) / 10) * 10
+  const at = (temp: number) => ((temp - low) / (high - low)) * 100
   return (
     <Box mt="4">
-      <Text fontSize="xs" fontWeight="600" color="gray.700" mb="1.5">
-        Last {shown.length} readings: warmest by day, coldest at night (°C)
+      <Text fontSize="sm" fontWeight="700" color="gray.900">
+        The last {shown.length} readings
       </Text>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`Air temperature of the last ${shown.length} readings: between ${whole.format(low)} and ${whole.format(high)} degrees Celsius.`} style={{ display: 'block' }}>
-        {shown.map((sol, i) => {
-          const x = i * slot + slot / 2
-          return (
-            <g key={sol.sol}>
-              <rect x={x - 7} y={y(sol.maxTempC!)} width="14" height={Math.max(2, y(sol.minTempC!) - y(sol.maxTempC!))} rx="7" fill="#5b7fd6" opacity="0.85" />
-              <text x={x} y={y(sol.maxTempC!) - 5} textAnchor="middle" fontSize="10" fontWeight="600" fill="#374151" fontFamily="Inter, system-ui, sans-serif">
-                {whole.format(sol.maxTempC!)}°
-              </text>
-              <text x={x} y={y(sol.minTempC!) + 13} textAnchor="middle" fontSize="10" fontWeight="600" fill="#374151" fontFamily="Inter, system-ui, sans-serif">
-                {whole.format(sol.minTempC!)}°
-              </text>
-              <text x={x} y={H - 4} textAnchor="middle" fontSize="9" fill="#6b7280" fontFamily="Inter, system-ui, sans-serif">
-                day {sol.sol}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
+      <HStack gap="4" mt="1" mb="2" fontSize="xs" color="gray.700">
+        <HStack gap="1.5">
+          <Box boxSize="10px" borderRadius="full" bg="#3f6fd8" aria-hidden />
+          <Text>Coldest, at night</Text>
+        </HStack>
+        <HStack gap="1.5">
+          <Box boxSize="10px" borderRadius="full" bg="#e8833a" aria-hidden />
+          <Text>Warmest, by day</Text>
+        </HStack>
+      </HStack>
+      <VStack as="ul" align="stretch" gap="2" listStyleType="none">
+        {shown.map((sol, i) => (
+          <Flex as="li" key={sol.sol} align="center" gap="3">
+            <Box flexShrink={0} w="74px">
+              <Text fontSize="xs" fontWeight="600" color="gray.800" lineHeight="1.3" fontVariantNumeric="tabular-nums">
+                Day {sol.sol}
+              </Text>
+              {i === 0 && (
+                <Text fontSize="2xs" color="gray.500" lineHeight="1.3">
+                  newest
+                </Text>
+              )}
+            </Box>
+            <Text flexShrink={0} w="42px" textAlign="right" fontSize="sm" fontWeight="700" color="#2f57b0" fontVariantNumeric="tabular-nums">
+              {whole.format(sol.minTempC!)}°
+            </Text>
+            {/* The bar: from the night temperature to the day temperature, on the shared scale. */}
+            <Box flex="1" position="relative" h="10px" borderRadius="full" bg="gray.100" aria-hidden>
+              <Box position="absolute" top="0" bottom="0" left={`${at(sol.minTempC!)}%`} w={`${at(sol.maxTempC!) - at(sol.minTempC!)}%`} borderRadius="full" bgGradient="to-r" gradientFrom="#3f6fd8" gradientTo="#e8833a" />
+            </Box>
+            <Text flexShrink={0} w="42px" fontSize="sm" fontWeight="700" color="#b85a17" fontVariantNumeric="tabular-nums">
+              {whole.format(sol.maxTempC!)}°
+            </Text>
+          </Flex>
+        ))}
+      </VStack>
+      <Text fontSize="2xs" color="gray.500" mt="2" lineHeight="1.4">
+        Degrees Celsius. All bars use one scale, from {low}° to {high}°. &ldquo;Day&rdquo; is the Mars day of the mission.
+      </Text>
     </Box>
   )
 }
