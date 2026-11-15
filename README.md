@@ -40,8 +40,8 @@ The first screen presents the idea of team **Red Compass**. Colours come from th
 | 3D space scene | Three.js: Mars with the real NASA Viking colour mosaic (a sharper version loads in the background), an orange-red glow, two orbit rings, stars, and red rocks with a rough stone surface that tumble slowly (the rock surface is drawn by code, it is not a photo) |
 | Top bar | Glass pills: "NASA Space Apps Challenge 2026" and the Red Compass mark, the section menu, and the "Open the map" button |
 | Scroll story | Smooth scrolling (Lenis) + GSAP ScrollTrigger: the planet moves beside the text, turns to Jezero (red pin), then shows a START and a GOAL point with two winding routes |
-| Sections | First screen · Mission (three steps) · Data system (four NASA sources) · Interface · About Red Compass |
-| Honesty | Route planning is marked **Coming next**. The two routes and the GOAL point on the globe are an illustration, not calculated routes |
+| Sections | First screen · Mission (three steps, all built: see the planet, land in Jezero, plan the walk) · Data system (six sources from NASA and USGS) · Interface (the six tools of the map) · About Red Compass |
+| Honesty | The two routes and the GOAL point on the globe are a drawing, and the page says so: the real routes are worked out in the map. The page calls the map a planning prototype, not a navigation system |
 | Entry to the map | Every "Open the map" / "Launch application" button leads to `/#/map`. The compass mark in the map's top bar leads back |
 | NASA logo | Not used. The NASA insignia needs NASA's permission. The event name is written as text |
 

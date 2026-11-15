@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Badge, Box, Button, Container, Flex, Heading, HStack, IconButton, Link, SimpleGrid, Text, VStack } from '@chakra-ui/react'
-import { ArrowDown, ArrowRight, Camera, Globe, Layers, Layers2, MapPin, Menu, Mountain, MoveDown, Route, Satellite, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, Camera, ClipboardList, Globe, Layers, Layers2, MapPin, Menu, Mountain, Route, Ruler, Shapes, TrendingUp, X } from 'lucide-react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
@@ -44,16 +44,16 @@ const STEPS = [
   {
     number: '02',
     title: 'Land in Jezero Crater',
-    text: 'Fly down to where the Perseverance rover landed. Real 3D ground, photos sharp enough to see sand ripples.',
+    text: 'Fly down to where the Perseverance rover landed. Real 3D ground, photos sharp enough to see sand ripples, and the rover\'s own path and photos.',
     Icon: MapPin,
     ready: true,
   },
   {
     number: '03',
     title: 'Plan the Marswalk',
-    text: 'Pick a start and a science goal. The map compares two ways to walk there: distance, climb, slope and time.',
+    text: 'Pick a start and a goal. The map creates several routes, checks them, and tells you which one is best and what to take care of.',
     Icon: Route,
-    ready: false,
+    ready: true,
   },
 ] as const
 
@@ -62,12 +62,17 @@ const DATA = [
   { value: '6 m', label: 'Jezero region', text: 'CTX camera mosaic, with all photo strips aligned.', Icon: Camera },
   { value: '25 cm', label: 'Near the landing site', text: 'HiRISE, the sharpest camera in orbit around Mars.', Icon: Layers },
   { value: '3D', label: 'Real terrain', text: 'NASA Mars Trek elevation: crater walls, the delta, the hills.', Icon: Mountain },
+  { value: '20 m', label: 'Heights for routes', text: 'The USGS height map of Jezero: every height, slope and route is worked out from it.', Icon: TrendingUp },
+  { value: '14', label: 'Kinds of ground', text: 'The USGS geologic map of Jezero: delta, crater floor, loose sand and more.', Icon: Shapes },
 ] as const
 
 const INTERFACE = [
-  { title: '2D and 3D', text: 'Switch between a flat map and the real planet. You stay at the same place.', Icon: Layers2 },
-  { title: 'Down to the ground', text: 'Fly to Jezero and go down to 25 m above the surface, under a Mars sky.', Icon: MoveDown },
-  { title: 'Live NASA data', text: 'Nothing is stored. Every image comes from NASA at the moment you look at it.', Icon: Satellite },
+  { title: '2D and 3D', text: 'A flat map or the real planet, down to 25 m above the ground. You stay at the same place.', Icon: Layers2 },
+  { title: 'Layers and legend', text: 'Rover path, rock map, night heat, a radiation estimate. Switch each one, or one colour of it.', Icon: Layers },
+  { title: 'Route', text: 'Several routes are created and scored. You see the best one, the reason, and what to take care of.', Icon: Route },
+  { title: 'Place info', text: 'Click any spot: height, slope, kind of ground, and real photos the rover took nearby.', Icon: MapPin },
+  { title: 'Measure', text: 'Distances and areas on the ground, in the units you choose.', Icon: Ruler },
+  { title: 'Briefing', text: 'Before you go outside: NASA weather at Jezero, daylight, radiation, dust season.', Icon: ClipboardList },
 ] as const
 
 function openMap() {
@@ -195,10 +200,10 @@ export default function Landing() {
 
       {/* Floating top bar: the team lockup, a glass pill menu, and the way into the map. */}
       <Flex as="header" position="fixed" top="4" insetX="0" zIndex="20" justify="center" px={{ base: '4', md: '8' }}>
-        <Flex w="full" maxW="1280px" align="center" justify="space-between" gap="4">
-          <HStack gap="3.5" pl="4" pr="5" py="2" borderRadius="full" borderWidth="1px" borderColor="whiteAlpha.200" bg="whiteAlpha.100" backdropFilter="blur(14px)">
+        <Box w="full" maxW="1280px" display="grid" gridTemplateColumns={{ base: 'auto 1fr', lg: '1fr auto 1fr' }} alignItems="center" gap="4">
+          <HStack justifySelf="start" h="12" gap="3.5" pl="4" pr="5" borderRadius="full" borderWidth="1px" borderColor="whiteAlpha.200" bg="whiteAlpha.100" backdropFilter="blur(14px)">
             {/* The event name as text. The NASA logo itself needs permission from NASA, so it is not used. */}
-            <Box lineHeight="1.1" hideBelow="sm">
+            <Box lineHeight="1.15" hideBelow="sm">
               <Text fontFamily={DISPLAY_FONT} fontWeight="700" fontSize="xs" letterSpacing="0.04em">
                 NASA SPACE APPS
               </Text>
@@ -208,7 +213,7 @@ export default function Landing() {
             </Box>
             <Box w="1px" h="7" bg="whiteAlpha.400" hideBelow="sm" />
             <HStack gap="2.5">
-              <CompassStar size={32} />
+              <CompassStar size={30} />
               <Text fontFamily={DISPLAY_FONT} fontWeight="600" fontSize="xs" lineHeight="1.15" letterSpacing="0.04em">
                 RED
                 <br />
@@ -217,16 +222,16 @@ export default function Landing() {
             </HStack>
           </HStack>
 
-          <HStack as="nav" aria-label="Sections" gap="1" px="2" py="1" borderRadius="full" borderWidth="1px" borderColor="whiteAlpha.200" bg="whiteAlpha.100" backdropFilter="blur(14px)" hideBelow="lg">
+          <HStack as="nav" aria-label="Sections" justifySelf="center" h="12" gap="1" px="2" borderRadius="full" borderWidth="1px" borderColor="whiteAlpha.200" bg="whiteAlpha.100" backdropFilter="blur(14px)" hideBelow="lg">
             {NAV.map(([label, href]) => (
-              <Link key={href} href={href} px="3.5" py="1.5" fontSize="sm" color="whiteAlpha.800" borderRadius="full" _hover={{ color: 'white', bg: 'whiteAlpha.200', textDecoration: 'none' }}>
+              <Link key={href} href={href} display="flex" alignItems="center" h="8" px="3.5" fontSize="sm" color="whiteAlpha.800" borderRadius="full" _hover={{ color: 'white', bg: 'whiteAlpha.200', textDecoration: 'none' }}>
                 {label}
               </Link>
             ))}
           </HStack>
 
-          <HStack gap="2">
-            <Button onClick={openMap} size="sm" borderRadius="full" bg={RED} color="white" boxShadow={`0 8px 28px ${RED}55`} _hover={{ bg: '#c91b17', transform: 'translateY(-1px)' }} transition="all 0.2s ease">
+          <HStack justifySelf="end" gap="2">
+            <Button onClick={openMap} h="12" px="6" fontSize="sm" borderRadius="full" bg={RED} color="white" boxShadow={`0 8px 28px ${RED}55`} _hover={{ bg: '#c91b17', transform: 'translateY(-1px)' }} transition="all 0.2s ease">
               Open the map
               <ArrowRight size={15} aria-hidden />
             </Button>
@@ -237,7 +242,7 @@ export default function Landing() {
                 aria-expanded={menuOpen}
                 onClick={() => setMenuOpen((open) => !open)}
                 variant="outline"
-                size="sm"
+                boxSize="12"
                 color="white"
                 borderColor="whiteAlpha.300"
                 bg="whiteAlpha.100"
@@ -248,7 +253,7 @@ export default function Landing() {
                 {menuOpen ? <X size={16} aria-hidden /> : <Menu size={16} aria-hidden />}
               </IconButton>
               {menuOpen && (
-                <VStack position="absolute" top="11" right="0" minW="220px" align="stretch" gap="1" p="2" borderRadius="xl" borderWidth="1px" borderColor="whiteAlpha.300" bg={`${NAVY}f2`} backdropFilter="blur(14px)" shadow="lg">
+                <VStack position="absolute" top="14" right="0" minW="220px" align="stretch" gap="1" p="2" borderRadius="xl" borderWidth="1px" borderColor="whiteAlpha.300" bg={`${NAVY}f2`} backdropFilter="blur(14px)" shadow="lg">
                   {NAV.map(([label, href]) => (
                     <Link key={href} href={href} onClick={() => setMenuOpen(false)} px="3" py="2" fontSize="sm" borderRadius="md" color="white" _hover={{ bg: 'whiteAlpha.200', textDecoration: 'none' }}>
                       {label}
@@ -258,7 +263,7 @@ export default function Landing() {
               )}
             </Box>
           </HStack>
-        </Flex>
+        </Box>
       </Flex>
 
       <Box position="relative" zIndex="1">
@@ -299,7 +304,7 @@ export default function Landing() {
                 <SectionTitle>
                   Three steps.
                   <br />
-                  One safe walk.
+                  One planned walk.
                 </SectionTitle>
                 <VStack mt="8" gap="2" align="stretch">
                   {STEPS.map(({ number, title, text, Icon, ready }, index) => {
@@ -344,7 +349,11 @@ export default function Landing() {
                                 <Legend color={RED} shape="dot" label="Start" />
                                 <Legend color="#fff" shape="dot" label="Science goal" />
                                 <Legend color={RED} shape="line" label="Shortest route" />
-                                <Legend color="#fff" shape="line" label="Gentler slopes" />
+                                <Legend color="#fff" shape="line" label="Lower-slope route" />
+                                {/* Honest: this globe shows a drawing. The map works out the real routes. */}
+                                <Text gridColumn="1 / -1" color="whiteAlpha.600">
+                                  The lines on this globe are a drawing. The map works out the real routes.
+                                </Text>
                               </SimpleGrid>
                             )}
                           </Box>
@@ -368,12 +377,13 @@ export default function Landing() {
                   Nothing invented.
                   <br />
                   <Box as="span" color={EMBER}>
-                    All from NASA.
+                    Real mission data.
                   </Box>
                 </SectionTitle>
                 <Text mt="5" color="whiteAlpha.800" lineHeight="tall">
-                  Every image and every hill on the map comes from a NASA mission, loaded live from NASA services. The closer you
-                  get, the sharper the source.
+                  Every image, every hill and every kind of ground on the map comes from a NASA mission or from the USGS, loaded
+                  live from their services. The closer you get, the sharper the source. Also live: the Perseverance rover&rsquo;s
+                  path, its photos and its weather station.
                 </Text>
               </Box>
               <SimpleGrid mt="8" columns={{ base: 1, sm: 2 }} gap="3">
@@ -405,16 +415,16 @@ export default function Landing() {
               <Box data-reveal>
                 <Eyebrow>Interface</Eyebrow>
                 <SectionTitle>
-                  One screen.
+                  One map.
                   <br />
-                  Two views.
+                  The tools to plan.
                 </SectionTitle>
               </Box>
-              <VStack mt="8" gap="3" align="stretch">
+              <SimpleGrid mt="8" columns={{ base: 1, sm: 2 }} gap="3">
                 {INTERFACE.map(({ title, text, Icon }) => (
                   <Card key={title}>
-                    <HStack gap="4" align="start">
-                      <Flex boxSize="10" flexShrink={0} align="center" justify="center" borderRadius="lg" bg="whiteAlpha.100" borderWidth="1px" borderColor="whiteAlpha.200">
+                    <HStack gap="3" align="start">
+                      <Flex boxSize="9" flexShrink={0} align="center" justify="center" borderRadius="lg" bg="whiteAlpha.100" borderWidth="1px" borderColor="whiteAlpha.200">
                         <Icon size={18} aria-hidden color={EMBER} />
                       </Flex>
                       <Box>
@@ -426,7 +436,7 @@ export default function Landing() {
                     </HStack>
                   </Card>
                 ))}
-              </VStack>
+              </SimpleGrid>
             </Box>
           </Container>
         </Box>
@@ -443,8 +453,9 @@ export default function Landing() {
             </SectionTitle>
             <Text maxW="540px" color="whiteAlpha.800" lineHeight="tall">
               Red Compass is a team in the NASA Space Apps Challenge 2026. We build a map that helps the first people on Mars
-              find their way. The map is open now: fly to Jezero, switch between 2D and 3D, go down to the surface. Route
-              planning is the next step we are building.
+              find their way. The map is open now: fly to Jezero, switch layers, check any place, measure, read the briefing,
+              and let the map create walking routes and name the best one. It is a planning prototype built on real data, not
+              a navigation system for a real mission.
             </Text>
             <Button onClick={openMap} size="lg" h="14" px="8" borderRadius="full" bg={RED} color="white" fontWeight="600" letterSpacing="0.05em" boxShadow={`0 8px 30px ${RED}66`} _hover={{ bg: '#c91b17', transform: 'translateY(-1px)' }} transition="all 0.2s ease">
               LAUNCH APPLICATION
@@ -452,7 +463,7 @@ export default function Landing() {
             </Button>
           </VStack>
           <Text mt="auto" pb="6" pt="16" fontSize="xs" color="whiteAlpha.700">
-            Images and terrain: NASA/JPL-Caltech Mars Trek · USGS Astrogeology · Red Compass © All Rights Reserved
+            Data: NASA/JPL-Caltech (Mars Trek, Mars 2020) · USGS Astrogeology · Red Compass © All Rights Reserved
           </Text>
         </Flex>
       </Box>
