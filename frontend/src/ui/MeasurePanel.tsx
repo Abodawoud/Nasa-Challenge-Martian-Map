@@ -43,7 +43,7 @@ export function MeasurePanel({ viewer, open, onClose }: Props) {
     <ToolCard id="tool-measure" title="Measure" icon={<Ruler size={16} aria-hidden />} onClose={onClose}>
       <Box px="4" py="3" borderBottomWidth="1px" borderColor="gray.100">
         <Text fontSize="xs" color="gray.700">
-          <b>Click</b> on the map to add points. <b>Drag</b> a point to move it. <b>Right click</b> a point to delete it. The map still moves when you drag the ground.
+          <b>Click</b> to add points. <b>Double click</b> or <b>Esc</b> to finish. <b>Drag</b> a point to move it, <b>right click</b> it to delete it. Drag the ground to move the map.
         </Text>
       </Box>
 

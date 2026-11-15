@@ -215,7 +215,7 @@ export class IdentifyTool {
 
   setActive(active: boolean) {
     this.active = active
-    toolInput.cursor = active ? 'help' : ''
+    toolInput.cursor = active ? 'crosshair' : ''
     this.viewer.scene.canvas.style.cursor = toolInput.cursor
   }
 
