@@ -28,6 +28,8 @@ const LINE_COLOR = '#ffffff'
 
 /** One drive: its points as [lon, lat, lon, lat, ...] and the box around them. */
 interface Drive {
+  /** The Mars day (sol) of this drive. */
+  sol: number
   points: Float64Array
   west: number
   south: number
@@ -109,7 +111,7 @@ export function loadRoverPath(): Promise<RoverPath> {
           const simple = simplify(line, TOLERANCE_DEG)
           if (simple.length < 2) continue
           const points = new Float64Array(simple.length * 2)
-          const drive: Drive = { points, west: Infinity, south: Infinity, east: -Infinity, north: -Infinity }
+          const drive: Drive = { sol: feature.properties.sol ?? 0, points, west: Infinity, south: Infinity, east: -Infinity, north: -Infinity }
           simple.forEach(([lon, lat], i) => {
             points[i * 2] = lon
             points[i * 2 + 1] = lat
@@ -138,6 +140,25 @@ export function loadRoverPath(): Promise<RoverPath> {
       throw error
     })
   return pending
+}
+
+/**
+ * The drive that passes nearest to a place, and how far away (metres, measured to the
+ * points of the simplified path, so good to a few metres).
+ */
+export function nearestDrive(path: RoverPath, lon: number, lat: number): { sol: number; distanceM: number } {
+  // Metres per degree on Mars (2 pi R / 360). East-west shrinks with latitude.
+  const perLat = 59274.7
+  const perLon = perLat * Math.cos((lat * Math.PI) / 180)
+  let best = { sol: 0, distanceM: Infinity }
+  for (const drive of path.drives) {
+    const { points } = drive
+    for (let i = 0; i < points.length; i += 2) {
+      const distanceM = Math.hypot((points[i] - lon) * perLon, (points[i + 1] - lat) * perLat)
+      if (distanceM < best.distanceM) best = { sol: drive.sol, distanceM }
+    }
+  }
+  return best
 }
 
 /** An imagery layer that paints the path. Add it on top of the photo layers. */

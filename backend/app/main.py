@@ -1,15 +1,31 @@
 """Martian Map backend.
 
-M0: only a health check. The DEM, routes and point info arrive in M3 and M4
-(see PLAN.md sections 6 and 8).
+M0: health check.
+M3: the Jezero elevation grid (DEM). Info about it, and elevation and slope of a point.
+Routes arrive in M4 (see PLAN.md sections 6 and 8).
 """
 
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from typing import Any
+
+from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
+
+from . import dem
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start the DEM download and load in the background when the app starts."""
+    dem.store.start_loading()
+    yield
+
 
 app = FastAPI(
     title="Martian Map API",
     description="Calculations for the Jezero Marswalk planner: elevation, slope and routes.",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
 
@@ -17,3 +33,82 @@ app = FastAPI(
 def health() -> dict[str, str]:
     """Answer 'ok' when the backend is running."""
     return {"status": "ok", "service": "martian-map-backend"}
+
+
+@app.get("/api/dem/info")
+def dem_info() -> dict[str, Any]:
+    """Describe the elevation grid and say if it is ready.
+
+    Always answers with HTTP 200. Read the 'status' field.
+    'resolution_m', 'bounds', 'width' and 'height' are null until the grid is ready.
+    """
+    dem.store.start_loading()
+    status, error = dem.store.status()
+    grid = dem.store.grid()
+    info: dict[str, Any] = {
+        "status": status,
+        "error": error,
+        "source": dem.SOURCE_NAME,
+        "url": dem.DEM_URL,
+        "doi": dem.SOURCE_DOI,
+        "resolution_m": None,
+        "bounds": None,
+        "width": None,
+        "height": None,
+        "projection": "Equirectangular, Mars sphere radius 3396190 m, centre longitude 0, standard parallel 0",
+        "vertical_reference": dem.VERTICAL_REFERENCE,
+    }
+    if grid is not None:
+        rows, cols = grid.heights.shape
+        info["resolution_m"] = round(grid.cell_x_m, 3)
+        info["bounds"] = [round(v, 6) for v in grid.bounds_deg()]
+        info["width"] = cols
+        info["height"] = rows
+    return info
+
+
+@app.get("/api/point")
+def point(
+    lon: float = Query(..., ge=-180.0, le=360.0, description="Longitude in degrees, east-positive."),
+    lat: float = Query(..., ge=-90.0, le=90.0, description="Latitude in degrees, planetocentric."),
+) -> Any:
+    """Elevation and slope of one point, read from the USGS DEM.
+
+    Answers 'inside: false' with no numbers if the point is outside the grid or on a cell with no data.
+    Answers HTTP 503 with a JSON body while the grid is still loading, or if loading failed.
+    'slope_deg' can be null on the outer border of the grid, where the 3x3 window is not complete.
+    """
+    dem.store.start_loading()
+    status, error = dem.store.status()
+    grid = dem.store.grid()
+    if grid is None:
+        detail = (
+            "The elevation grid is still loading. Try again in a few seconds."
+            if status == "loading"
+            else "The elevation grid could not be loaded."
+        )
+        return JSONResponse(
+            status_code=503,
+            content={"status": status, "error": error, "detail": detail},
+            headers={"Retry-After": "3"},
+        )
+
+    # The grid uses longitudes from -180 to 180. Accept 0 to 360 as well.
+    grid_lon = lon - 360.0 if lon > 180.0 else lon
+
+    answer: dict[str, Any] = {
+        "inside": False,
+        "lon": lon,
+        "lat": lat,
+        "resolution_m": round(grid.cell_x_m),
+        "source": dem.SOURCE_NAME,
+    }
+    elevation = grid.elevation(grid_lon, lat)
+    if elevation is None:
+        return answer
+
+    slope = grid.slope(grid_lon, lat)
+    answer["inside"] = True
+    answer["elevation_m"] = round(elevation, 1)
+    answer["slope_deg"] = None if slope is None else round(slope, 1)
+    return answer

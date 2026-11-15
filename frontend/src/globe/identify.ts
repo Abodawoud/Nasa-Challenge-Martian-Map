@@ -1,0 +1,301 @@
+// The Identify tool: click a place, get what is known about it.
+//
+// Where each fact comes from:
+//   height and slope   our backend, from the USGS height map of Jezero (20 m per pixel)
+//   rock type          the USGS geologic map (the same data as the "Geologic units" layer)
+//   rover              NASA's Mars 2020 drive path, and NASA's photo feed for that Mars day
+// A fact that is not available at the place says so. Nothing is filled in with a guess.
+//
+// Also here: waypoints (places the user saved). They are kept in the browser's own storage,
+// so they are still there after a reload, on this computer only.
+import * as Cesium from 'cesium'
+import { ROCK_UNITS_SOURCE, ROCK_UNIT_INFO } from './layers.config'
+import { geologyAt, geologyBounds } from './geologyLayer'
+import { loadRoverPath, nearestDrive } from './pathLayer'
+import { drawPosition, pickPlace, toolInput } from './mapTools'
+import type { LonLat } from './mapTools'
+
+// ------------------------------------------------------------------ the facts
+
+export type Fact<T> = { state: 'loading' } | { state: 'ready'; value: T } | { state: 'none'; why: string } | { state: 'error'; why: string }
+
+export interface GroundFact {
+  elevationM: number
+  /** null at the very edge of the height map, where the slope cannot be worked out. */
+  slopeDeg: number | null
+  resolutionM: number
+  source: string
+}
+
+/** Height and slope from the backend (`/api/point`). */
+export async function groundAt(place: LonLat, signal: AbortSignal): Promise<Fact<GroundFact>> {
+  try {
+    const response = await fetch(`/api/point?lon=${place.lon.toFixed(6)}&lat=${place.lat.toFixed(6)}`, { signal })
+    if (response.status === 503) return { state: 'error', why: 'The height map is still loading on the server. Click again in a few seconds.' }
+    if (!response.ok) return { state: 'error', why: `The server answered ${response.status}.` }
+    const data = (await response.json()) as { inside: boolean; elevation_m?: number | null; slope_deg?: number | null; resolution_m?: number; source?: string }
+    if (!data.inside || data.elevation_m === undefined || data.elevation_m === null) {
+      return { state: 'none', why: 'No height data here. Our height map covers Jezero Crater only.' }
+    }
+    return { state: 'ready', value: { elevationM: data.elevation_m, slopeDeg: data.slope_deg ?? null, resolutionM: data.resolution_m ?? 20, source: data.source ?? 'USGS' } }
+  } catch (error) {
+    if (signal.aborted) throw error
+    return { state: 'error', why: 'The server could not be reached.' }
+  }
+}
+
+/** Our words for a slope. They only describe the angle: they are not a safety rating. */
+export function slopeWord(degrees: number): string {
+  if (degrees < 5) return 'Nearly flat'
+  if (degrees < 15) return 'Gentle to moderate'
+  if (degrees < 25) return 'Steep'
+  return 'Very steep'
+}
+
+export interface RockFact {
+  label: string
+  hint: string
+  color: string
+}
+
+/** The rock unit at a place, from the USGS geologic map. */
+export async function rockAt(place: LonLat): Promise<Fact<RockFact>> {
+  try {
+    const [west, south, east, north] = await geologyBounds(ROCK_UNITS_SOURCE)
+    if (place.lon < west || place.lon > east || place.lat < south || place.lat > north) {
+      return { state: 'none', why: 'Outside the USGS geologic map (it covers Jezero and the land west of it).' }
+    }
+    const unit = await geologyAt(ROCK_UNITS_SOURCE, place.lon, place.lat)
+    const info = unit === undefined ? undefined : ROCK_UNIT_INFO[unit]
+    if (!info) return { state: 'none', why: 'The USGS map has no rock unit at this place.' }
+    return { state: 'ready', value: info }
+  } catch {
+    return { state: 'error', why: 'The USGS geologic map could not be loaded.' }
+  }
+}
+
+export interface RoverPhoto {
+  small: string
+  large: string
+  caption: string
+}
+
+export interface RoverFact {
+  sol: number
+  distanceM: number
+  /** Photos the rover took on that sol. Empty when the place is far from the path. */
+  photos: RoverPhoto[]
+}
+
+/** Photos are shown only when the rover drove this near to the place (metres). */
+export const PHOTO_RANGE_M = 300
+
+/** The nearest drive of the rover, and photos from that Mars day when it is near. */
+export async function roverAt(place: LonLat, signal: AbortSignal): Promise<Fact<RoverFact>> {
+  try {
+    const path = await loadRoverPath()
+    const [west, south, east, north] = path.bounds
+    // Far from Jezero there is nothing useful to say about the rover.
+    if (place.lon < west - 1 || place.lon > east + 1 || place.lat < south - 1 || place.lat > north + 1) {
+      return { state: 'none', why: 'The rover is in Jezero Crater, far from this place.' }
+    }
+    const { sol, distanceM } = nearestDrive(path, place.lon, place.lat)
+    let photos: RoverPhoto[] = []
+    if (distanceM <= PHOTO_RANGE_M) {
+      // NASA's public feed of raw rover photos. Navigation camera: it looks at the ground around the rover.
+      const url = `https://mars.nasa.gov/rss/api/?feed=raw_images&category=mars2020&feedtype=json&sol=${sol}&num=50&page=0&order=sol+desc&search=%7CNAVCAM_LEFT`
+      try {
+        const response = await fetch(url, { signal })
+        const feed = (await response.json()) as {
+          images?: Array<{ image_files?: { small?: string; large?: string }; caption?: string; extended?: { mastEl?: string } }>
+        }
+        // The feed answers with every navigation-camera photo of the sol, also ones of the sky
+        // and the sun (seen on 2026-11-15: 51 photos, the first ones of the sky). Keep photos
+        // where the camera looked level or down (mast elevation at most 5 degrees), a few of them.
+        photos = (feed.images ?? [])
+          .filter((image) => image.image_files?.small && image.image_files.large && Number(image.extended?.mastEl ?? 90) <= 5)
+          .slice(0, 4)
+          .map((image) => ({ small: image.image_files!.small!, large: image.image_files!.large!, caption: (image.caption ?? '').split('\n')[0] }))
+      } catch (error) {
+        if (signal.aborted) throw error
+        // No photos is not an error of the whole fact: the distance is still true.
+      }
+    }
+    return { state: 'ready', value: { sol, distanceM, photos } }
+  } catch (error) {
+    if (signal.aborted) throw error
+    return { state: 'error', why: 'The rover path could not be loaded from NASA.' }
+  }
+}
+
+// ------------------------------------------------------------------ waypoints
+
+export interface Waypoint extends LonLat {
+  id: string
+  name: string
+}
+
+const STORAGE_KEY = 'martian-map-waypoints'
+
+function readWaypoints(): Waypoint[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as Waypoint[]
+    return Array.isArray(saved) ? saved.filter((w) => typeof w.lon === 'number' && typeof w.lat === 'number' && typeof w.name === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+let waypoints = readWaypoints()
+const listeners = new Set<() => void>()
+
+function setWaypoints(next: Waypoint[]) {
+  waypoints = next
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  } catch {
+    // Storage full or blocked: the waypoints still work until the page is closed.
+  }
+  for (const listener of listeners) listener()
+}
+
+export const waypointStore = {
+  get: () => waypoints,
+  subscribe(listener: () => void) {
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+    }
+  },
+  add(place: LonLat, name: string) {
+    setWaypoints([...waypoints, { id: `${Date.now()}-${Math.round(Math.random() * 1e6)}`, name: name.trim() || `Waypoint ${waypoints.length + 1}`, lon: place.lon, lat: place.lat }])
+  },
+  remove(id: string) {
+    setWaypoints(waypoints.filter((w) => w.id !== id))
+  },
+}
+
+// ------------------------------------------------------- the tool on the map
+
+const NAVY = Cesium.Color.fromCssColorString('#0c1a3d')
+const CLICK_PX = 5
+
+/**
+ * Listens for clicks on the map while active, and draws the picked place and the waypoints.
+ * A press that moves is a drag of the map, not a pick.
+ */
+export class IdentifyTool {
+  private active = false
+  private press: { x: number; y: number } | null = null
+  private picked: LonLat | null = null
+  private pickedEntity: Cesium.Entity | null = null
+  private waypointEntities: Cesium.Entity[] = []
+  private readonly viewer: Cesium.Viewer
+  private readonly onPick: (place: LonLat) => void
+  private readonly stops: Array<() => void> = []
+
+  constructor(viewer: Cesium.Viewer, onPick: (place: LonLat) => void) {
+    this.viewer = viewer
+    this.onPick = onPick
+    const canvas = viewer.scene.canvas
+    canvas.addEventListener('pointerdown', this.onDown, true)
+    canvas.addEventListener('pointerup', this.onUp, true)
+    this.stops.push(
+      () => canvas.removeEventListener('pointerdown', this.onDown, true),
+      () => canvas.removeEventListener('pointerup', this.onUp, true),
+      waypointStore.subscribe(() => this.drawWaypoints()),
+      // After a 2D / 3D switch the drawing heights change: draw again.
+      viewer.scene.morphComplete.addEventListener(() => {
+        this.drawWaypoints()
+        this.drawPicked()
+      }),
+    )
+    this.drawWaypoints()
+  }
+
+  setActive(active: boolean) {
+    this.active = active
+    toolInput.cursor = active ? 'help' : ''
+    this.viewer.scene.canvas.style.cursor = toolInput.cursor
+  }
+
+  /** Remove the mark of the picked place. */
+  clearPick() {
+    this.picked = null
+    this.drawPicked()
+  }
+
+  destroy() {
+    for (const stop of this.stops) stop()
+    if (this.active) {
+      toolInput.cursor = ''
+      this.viewer.scene.canvas.style.cursor = ''
+    }
+    if (this.viewer.isDestroyed()) return
+    if (this.pickedEntity) this.viewer.entities.remove(this.pickedEntity)
+    for (const entity of this.waypointEntities) this.viewer.entities.remove(entity)
+  }
+
+  private position(event: MouseEvent) {
+    const rect = this.viewer.scene.canvas.getBoundingClientRect()
+    return new Cesium.Cartesian2(event.clientX - rect.left, event.clientY - rect.top)
+  }
+
+  private onDown = (event: PointerEvent) => {
+    if (!this.active || event.button !== 0) return
+    const position = this.position(event)
+    this.press = { x: position.x, y: position.y }
+  }
+
+  private onUp = (event: PointerEvent) => {
+    const press = this.press
+    this.press = null
+    if (!this.active || !press || event.button !== 0) return
+    const position = this.position(event)
+    if (Math.hypot(position.x - press.x, position.y - press.y) > CLICK_PX) return
+    const place = pickPlace(this.viewer, position)
+    if (!place) return
+    this.picked = place
+    this.drawPicked()
+    this.onPick(place)
+  }
+
+  private drawPicked() {
+    const { viewer } = this
+    if (viewer.isDestroyed()) return
+    if (this.pickedEntity) viewer.entities.remove(this.pickedEntity)
+    this.pickedEntity = null
+    if (this.picked) {
+      this.pickedEntity = viewer.entities.add({
+        position: drawPosition(viewer, this.picked, 3),
+        point: { pixelSize: 14, color: Cesium.Color.fromCssColorString('#ffd23f'), outlineColor: NAVY, outlineWidth: 3, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+      })
+    }
+    viewer.scene.requestRender()
+  }
+
+  private drawWaypoints() {
+    const { viewer } = this
+    if (viewer.isDestroyed()) return
+    for (const entity of this.waypointEntities) viewer.entities.remove(entity)
+    this.waypointEntities = waypointStore.get().map((waypoint) =>
+      viewer.entities.add({
+        position: drawPosition(viewer, waypoint, 3),
+        point: { pixelSize: 11, color: Cesium.Color.WHITE, outlineColor: NAVY, outlineWidth: 3, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+        label: {
+          text: waypoint.name,
+          font: '600 12px Inter, system-ui, sans-serif',
+          fillColor: Cesium.Color.WHITE,
+          style: Cesium.LabelStyle.FILL,
+          showBackground: true,
+          backgroundColor: NAVY.withAlpha(0.88),
+          backgroundPadding: new Cesium.Cartesian2(6, 4),
+          pixelOffset: new Cesium.Cartesian2(0, -20),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3_000_000),
+        },
+      }),
+    )
+    viewer.scene.requestRender()
+  }
+}

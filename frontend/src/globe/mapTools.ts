@@ -75,6 +75,23 @@ export function pointsBetween(a: LonLat, b: LonLat, count: number): LonLat[] {
   return points
 }
 
+/**
+ * Fly to a top view of a place. `acrossM` is about how much ground is seen from side to side.
+ * 3D: the camera height is counted from the ground the map draws at that place when it is
+ * loaded (else from the Trek ground near Jezero, about 5.6 km above Cesium's zero). The
+ * height only frames the view, it is never shown.
+ */
+export function flyToPlace(viewer: Cesium.Viewer, place: LonLat, acrossM: number) {
+  const flat = viewer.scene.mode === Cesium.SceneMode.SCENE2D
+  const ground = viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(place.lon, place.lat)) ?? 5640
+  viewer.camera.flyTo({
+    // In 2D the height given to flyTo becomes the width of the view.
+    destination: Cesium.Cartesian3.fromDegrees(place.lon, place.lat, flat ? acrossM : ground + acrossM * 0.9, MARS_ELLIPSOID),
+    orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+    duration: 1.8,
+  })
+}
+
 const number = (digits: number) => new Intl.NumberFormat('en', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 
 /** "86 m", "1.24 km", "1,530 km". */

@@ -306,6 +306,20 @@ const ROCK_UNITS: Array<[string, string, string, string]> = [
   ['13', '#ebeb66', 'Crater interior', 'Fallen blocks or other deposits inside two small craters.'],
 ]
 
+/** Name, colour and plain description of a rock unit, by the service's unit number. */
+export const ROCK_UNIT_INFO: Record<string, { color: string; label: string; hint: string }> = Object.fromEntries(
+  ROCK_UNITS.map(([unit, color, label, hint]) => [unit, { color, label, hint }]),
+)
+
+/** The geologic units layer of the USGS service (used by the layer and by Identify). */
+export const ROCK_UNITS_SOURCE: GeologySource = {
+  serviceLayer: 8,
+  geometry: 'polygon',
+  field: 'unit',
+  styles: Object.fromEntries(ROCK_UNITS.map(([unit, color]) => [unit, { fill: color }])),
+  countWord: 'areas',
+}
+
 // Order matters: this is also the drawing order, first entry on top (see layerControl.ts).
 export const PANEL_LAYERS: PanelLayer[] = [
   {
@@ -479,13 +493,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     note: 'The 14 kinds of rock and ground, each in its own colour.',
     legendItems: ROCK_UNITS.map(([, color, label, hint]) => ({ color, label, hint })),
     source: USGS_MAP,
-    geology: {
-      serviceLayer: 8,
-      geometry: 'polygon',
-      field: 'unit',
-      styles: Object.fromEntries(ROCK_UNITS.map(([unit, color]) => [unit, { fill: color }])),
-      countWord: 'areas',
-    },
+    geology: ROCK_UNITS_SOURCE,
     defaultOn: false,
     defaultOpacity: 0.55,
     adjustable: true,

@@ -123,6 +123,9 @@ as transparent black) with a blue-to-red ramp, following NASA's map PIA03480 (do
 about 10 to 20 rem per year). It is an ESTIMATE and must always be labelled so. Never print a dose number per
 place: the grey-to-height stretch of those tiles and the formula of the 2002 map are not published.
 
+**Backend height service (built 2026-11-15):** `GET /api/dem/info` and `GET /api/point?lon=&lat=` (`backend/app/dem.py`). Answers `elevation_m` and `slope_deg` (Horn, in ground metres) from the USGS 20 m DEM, `inside: false` outside it (bounds 77.1605 to 77.6990 E, 18.2110 to 18.7212 N), HTTP 503 while the file is still downloading. `slope_deg` can be null on the outermost cells. Checked: the landing site reads -2567.5 m (NASA's waypoint file: -2569.91 m), and over all 708 NASA waypoints the difference is -0.9 m on average (spread 3.3 m). Vertical zero: the numbers match NASA's AREOID heights (`elev_geoid`), not sphere heights, although the USGS metadata sentence says "refer to the sphere". No USGS text names the areoid model: say "Mars reference level (areoid)" in the UI, not more.
+**Map tools (2026-11-15):** `mapTools.ts` has the shared helpers (`pickPlace`, `drawPosition`, distances, `toolInput` to hold the mouse and the cursor over groundControls). Tools draw with entities at `globe.getHeight()` + a few metres and `disableDepthTestDistance` / `depthFailMaterial`, never clampToGround. Rover photos: `https://mars.nasa.gov/rss/api/?feed=raw_images&category=mars2020&feedtype=json&sol=N` (CORS `*`, ignores `num`, includes sky photos: filter on `extended.mastEl`).
+
 **2D never turns:** in 2D `enableRotate` must stay off (it switches Cesium's twist gesture), `enableTranslate` on.
 
 Older, stops at sol 1176 (ArcGIS feature service, not used): `https://trek.nasa.gov/mars/trekarcgis/rest/services/Perseverance_Traverse_Path/MapServer/0`

@@ -37,6 +37,8 @@ interface Shape {
   east: number
   north: number
   style: GeologyStyle
+  /** The value of the layer's style attribute (for the units: the unit number). */
+  key: string
 }
 
 interface ServiceFeature {
@@ -73,7 +75,7 @@ export function loadGeology(source: GeologySource): Promise<Shape[]> {
           const g = feature.geometry
           if (!style || !g) continue
           const lines = g.rings ?? g.paths ?? (g.x !== undefined && g.y !== undefined ? [[[g.x, g.y]]] : [])
-          const shape: Shape = { parts: [], west: Infinity, south: Infinity, east: -Infinity, north: -Infinity, style }
+          const shape: Shape = { parts: [], west: Infinity, south: Infinity, east: -Infinity, north: -Infinity, style, key }
           for (const line of lines) {
             const part = new Float64Array(line.length * 2)
             line.forEach(([x, y], i) => {
@@ -99,6 +101,36 @@ export function loadGeology(source: GeologySource): Promise<Shape[]> {
     loaded.set(source.serviceLayer, pending)
   }
   return pending
+}
+
+/**
+ * The area of a layer that holds a place: its key (for the units layer: the unit number), or
+ * undefined when the place is outside every area. Downloads the layer if it is not here yet.
+ */
+export async function geologyAt(source: GeologySource, lon: number, lat: number): Promise<string | undefined> {
+  const shapes = await loadGeology(source)
+  for (const shape of shapes) {
+    if (lon < shape.west || lon > shape.east || lat < shape.south || lat > shape.north) continue
+    // Even-odd rule over all rings: a place inside a hole of the area does not count.
+    let inside = false
+    for (const part of shape.parts) {
+      for (let i = 0, j = part.length - 2; i < part.length; j = i, i += 2) {
+        const xi = part[i]
+        const yi = part[i + 1]
+        const xj = part[j]
+        const yj = part[j + 1]
+        if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside
+      }
+    }
+    if (inside) return shape.key
+  }
+  return undefined
+}
+
+/** [west, south, east, north] of a loaded layer, degrees. */
+export async function geologyBounds(source: GeologySource): Promise<[number, number, number, number]> {
+  const shapes = await loadGeology(source)
+  return [Math.min(...shapes.map((s) => s.west)), Math.min(...shapes.map((s) => s.south)), Math.max(...shapes.map((s) => s.east)), Math.max(...shapes.map((s) => s.north))]
 }
 
 /** An imagery layer that paints the shapes. */
