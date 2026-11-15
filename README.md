@@ -1,12 +1,22 @@
 # Martian Map: Jezero Marswalk Planner
 
-**NASA Space Apps 2026 · Challenge: Interplanetary Survival Guide: Martian Map**
+**NASA Space Apps 2026 · Challenge: Interplanetary Survival Guide: Martian Map · Team Red Compass**
 
-A web map of Mars built on real NASA data. You can fly from space down to **Jezero Crater** (where the Perseverance rover landed), switch between 2D and 3D, and go down to 25 m above the ground to look at the crater floor, the river delta and the horizon.
+A web map of Mars built on real NASA and USGS data. You go from space down to **Jezero Crater** (where the Perseverance rover landed), look at the ground in 2D and 3D, check any place, measure, read a briefing, and let the map **create several walking routes, check them and name the best one**.
 
-> **This file describes what works today.** The full plan, every decision with its trade-offs, and the next milestones are in [`PLAN.md`](PLAN.md).
+> It is a **planning prototype**. It is not a navigation system for a real mission, and it never calls a route "safe".
+>
+> This file describes what works today. The decisions, their trade-offs and the status of every milestone are in [`PLAN.md`](PLAN.md) (start with its section 0).
 
-**Status:** Milestone **M0 done** (map foundation). Next: **M1**, the intro fly-in. Routes are planned for M3 to M5.
+**What is in it, in short**
+
+| | |
+|---|---|
+| **Two screens** | A landing page, and the map at `/#/map` |
+| **Views** | 2D (flat map) and 3D (the real planet, down to 25 m above the ground) |
+| **Nine tools** | Layers · TOC · Briefing · Route · Measure · Place info · Go to · Sources · Legend |
+| **Layers** | Photos (Viking, CTX, HiRISE) · the rover path · the USGS geologic map · night heat · a radiation estimate |
+| **Backend** | Real heights and slopes of Jezero, routes, a walking-time map |
 
 ---
 
@@ -88,19 +98,31 @@ A short reminder of these is shown in the bottom bar.
 
 ---
 
-## Data in use (all live from NASA, nothing stored)
+## Data in use (all live, nothing stored)
 
-| What you see | Source | Detail | Used when |
+Everything is loaded from public services at the moment you look at it. No data file is in this repository.
+
+| What | Source | Detail | Used for |
 |---|---|---|---|
-| Colour globe | NASA Mars Trek, Viking colour mosaic | 232 m | Far away |
-| **Jezero region** | NASA Mars Trek, CTX mosaic, aligned (`Jezero_CTX_BlockAdj_dd`) | ~6 m | Near Jezero |
-| Rest of Mars, close up | CTX global mosaic (Caltech Murray Lab, via Esri) | ~5 m | Near the ground outside Jezero |
-| Very close detail | NASA Mars Trek, HiRISE mosaic | 25 cm | Below about 3 km, crater centre only |
-| 3D ground | NASA Mars Trek terrain service | Down to ~1–2 m | Always |
+| Colour globe | NASA Mars Trek, Viking colour mosaic | 232 m | The planet from far away |
+| Jezero region photos | NASA Mars Trek, CTX mosaic, aligned (`Jezero_CTX_BlockAdj_dd`) | about 6 m | Near Jezero |
+| Rest of Mars, close up | CTX global mosaic (Caltech Murray Lab, served by Esri) | about 5 m | Near the ground outside Jezero |
+| Very close detail | NASA Mars Trek, HiRISE mosaic | 25 cm | Below about 3 km, near the landing site |
+| 3D ground | NASA Mars Trek terrain service | down to 1 to 2 m near the landing site, about 330 m far from it | The shape of the land on screen |
+| Night heat | NASA Mars Trek, THEMIS infrared | 100 m | The "Night heat" layer |
+| Elevation of the planet | NASA Mars Trek, MOLA | about 1.3 km | The radiation estimate layer |
+| **Height map of Jezero** | USGS, Mars 2020 TRN, CTX DTM | **20 m** | Real heights, slopes and every route (read by the backend) |
+| **Geologic map of Jezero** | USGS map SIM 3464 (Sun and Stack, 2020), feature service | 1:75,000 | Rock units, contacts, river channels, loose sand |
+| Rover path | NASA Mars 2020 mission map | every drive | The "Perseverance path" layer |
+| Rover photos | NASA Mars 2020 raw images | per Mars day | "Real look" in Place info |
+| Weather at Jezero | NASA Mars 2020 weather feed (rover station MEDA) | per Mars day, newest reading 27 April 2024 | Briefing |
+| Radiation, 0.64 mSv per day | Curiosity rover measurement (Hassler et al., 2014), used as an estimate | one number | Briefing and routes |
 
 **About the colours:** CTX and HiRISE are black-and-white cameras. They are tinted to Mars colours so they match the colour globe. This changes the look only, never a measurement.
 
-**About heights:** Trek's 3D ground uses its own height zero (about +5.6 km at Jezero instead of the real −2.5 km). It is correct for the shape of the land. Real heights for routes will come from the USGS elevation model in the backend (M3).
+**About heights:** Trek's 3D ground uses its own height zero (about +5.6 km at Jezero instead of the real −2.6 km). It is right for the shape of the land, so it is used for drawing only. Every height the app shows as a number comes from the USGS height map. Checked: the landing site reads −2567.5 m, and NASA's own rover data says −2569.9 m.
+
+**About estimates:** the radiation layer, the radiation dose of a walk and the walking time are estimates. The app labels each of them as an estimate and says what it is based on.
 
 ---
 
@@ -108,48 +130,98 @@ A short reminder of these is shown in the bottom bar.
 
 ```mermaid
 flowchart LR
-    U["👩‍🚀 You, in the browser"]
-    subgraph DOCKER["🐳 docker compose"]
-        FE["🖥️ frontend<br/>React + TypeScript + Vite<br/>CesiumJS"]
-        BE["🧮 backend<br/>Python FastAPI<br/>(health check now,<br/>routes in M3–M5)"]
+    U["You, in the browser"]
+    subgraph DOCKER["docker compose"]
+        FE["frontend<br/>React + TypeScript + Vite<br/>CesiumJS"]
+        BE["backend<br/>Python FastAPI<br/>heights, slopes, routes"]
     end
-    TREK["🛰️ NASA Mars Trek<br/>images + 3D ground"]
-    ESRI["🗺️ CTX global mosaic<br/>(Esri OnMars)"]
+    TREK["NASA Mars Trek<br/>photos, 3D ground, heat"]
+    ESRI["CTX global mosaic<br/>(Esri OnMars)"]
+    M20["NASA Mars 2020<br/>rover path, photos, weather"]
+    USGSF["USGS<br/>geologic map"]
+    USGSD["USGS<br/>height map of Jezero"]
     U --> FE
-    TREK -->|"live tiles"| FE
-    ESRI -->|"live tiles"| FE
-    FE <-->|"/api/*"| BE
+    TREK -->|live tiles| FE
+    ESRI -->|live tiles| FE
+    M20 -->|live| FE
+    USGSF -->|live| FE
+    FE <-->|/api| BE
+    USGSD -->|downloaded once,<br/>kept in a cache volume| BE
 ```
+
+### The stack
 
 | Part | Technology |
 |---|---|
-| Map engine | CesiumJS 1.147, one viewer, Mars as a sphere with radius 3,396,190 m (same as NASA's data) |
-| Screen | React 19, TypeScript, Vite, **Chakra UI 3** (theme in `src/theme.ts`), **Lucide** icons. Clean NASA website style |
-| Backend | Python 3.12, FastAPI |
-| Running | Docker Compose (`fe` and `be`) |
+| Website | React 19, TypeScript, Vite 8 |
+| UI | **Chakra UI 3** (theme in `src/theme.ts`), **Lucide** icons, font Inter. Colours from the Red Compass logo: navy `#0c1a3d`, red `#e8231f` |
+| Map engine | **CesiumJS 1.147**: one viewer, Mars as a sphere with radius 3,396,190 m (the same as NASA's data). No Cesium ion, no paid keys |
+| Landing page | Three.js, GSAP with ScrollTrigger, Lenis (smooth scrolling), font Unbounded |
+| Photo viewer | yet-another-react-lightbox |
+| Backend | Python 3.12, FastAPI, uvicorn |
+| Maths | numpy, rasterio (reads the height map), scikit-image (`MCP_Geometric` least-cost path), scipy, Pillow |
+| Running | Docker Compose: `fe`, `be`, and a cache volume for the height map |
+| Tests | pytest: 74 backend tests on small made-up grids |
+
+### What the backend answers
+
+| Address | Answer |
+|---|---|
+| `GET /api/health` | The backend is running |
+| `GET /api/dem/info` | The height map: ready or loading, its edges, its source |
+| `GET /api/point?lon=&lat=` | Height and slope of one place, the height range of Jezero, a 1 km cut through the ground |
+| `GET /api/routes?from_lon=&from_lat=&to_lon=&to_lat=` | Several routes, measured, scored and ranked, with the best one and the reason |
+| `GET /api/route?…` | The first version with two routes. Still there, no longer used by the app |
+| `GET /api/reach?lon=&lat=` | The walking time from one start to every place of Jezero, as a picture with a legend |
+
+The interactive list is at http://localhost:8000/docs when the app runs.
 
 ### Main files
 
 ```
 frontend/src/
 ├─ Root.tsx                    chooses the screen: landing page or map (/#/map)
-├─ landing/Landing.tsx         the landing page (Chakra + GSAP scroll story)
-├─ landing/MarsScene.ts        the 3D Mars of the landing page (Three.js)
-├─ theme.ts                    Chakra theme
-├─ App.tsx                     the map screen: top bar, status bar, view-mode buttons
-├─ globe/
-│  ├─ MarsViewer.tsx           Cesium viewer, camera limits, fly to Jezero, Mars sky
+├─ App.tsx                     the map screen: top bar, tool bar, map, status bar
+├─ theme.ts                    Chakra theme (logo colours)
+├─ landing/
+│  ├─ Landing.tsx              the landing page (scroll story, sections)
+│  └─ MarsScene.ts             the 3D Mars of the landing page (Three.js)
+├─ globe/                      everything that touches the map
+│  ├─ MarsViewer.tsx           Cesium viewer, camera limits, fly to Jezero, 2D / 3D
 │  ├─ mars.ts                  Mars sphere, landing site, terrain address
-│  ├─ layers.config.ts         the list of map layers (one entry per layer)
-│  ├─ imagery.ts               builds the layers from that list
-│  ├─ tint.ts                  Mars colour tint for black-and-white photos
-│  ├─ trekTerrain.ts           Trek 3D ground, with a fix for its tile bounds
 │  ├─ groundControls.ts        mouse controls in 3D near the ground
-│  └─ preload.ts               downloads the tiles of a place before the camera gets there
-└─ ui/MapControls.tsx          zoom, compass, whole planet, fullscreen
-backend/app/main.py            FastAPI app (/api/health)
+│  ├─ trekTerrain.ts           Trek 3D ground, with a fix for its tile bounds
+│  ├─ preload.ts               downloads the tiles of a place before the camera gets there
+│  ├─ layers.config.ts         the list of layers and of the rows in the Layers panel
+│  ├─ imagery.ts · tint.ts     builds the photo layers, tints grey photos to Mars colours
+│  ├─ pathLayer.ts             the rover path, painted as map tiles
+│  ├─ geologyLayer.ts          the USGS geologic map, painted as map tiles
+│  ├─ radiation.ts             the radiation estimate layer
+│  ├─ layerControl.ts          shows and hides layers on the map
+│  ├─ layerState.ts            one record of which layers are on (Layers, TOC and Legend share it)
+│  ├─ mapTools.ts              helpers for the tools: pick a place, distances, cursors
+│  ├─ lineDraw.ts · measure.ts drawing a line by hand, and the Measure tool on top of it
+│  ├─ identify.ts              Place info: the facts of a place, saved places
+│  ├─ route.ts                 Route: asks the backend, draws the routes, the route area
+│  ├─ weather.ts               reads NASA's weather feed for the Briefing
+│  └─ units.ts                 the units setting
+└─ ui/                         the panels
+   ├─ Sidebar.tsx              the tool bar, the panel card, Go to, Sources
+   ├─ LayersPanel.tsx · TocPanel.tsx · MapLegend.tsx
+   ├─ RoutePanel.tsx · MeasurePanel.tsx · UnitPicker.tsx
+   ├─ IdentifyPanel.tsx · IdentifyCharts.tsx   (Place info)
+   ├─ BriefingPanel.tsx
+   └─ MapControls.tsx · CompassStar.tsx
+backend/app/
+├─ main.py                     the API
+├─ dem.py                      downloads and reads the height map, height and slope of a point
+├─ terrain.py                  roughness and pits from the height map
+├─ routing.py                  least-cost path, the first two routes
+├─ candidates.py               several routes: create, measure, score, rank, explain
+└─ reach.py                    the walking-time map
+backend/tests/                 74 tests
 docker-compose.yml             runs both parts
-PLAN.md                        the plan, decisions and trade-offs
+PLAN.md                        the plan, decisions and status
 CLAUDE.md                      notes for AI coding sessions
 ```
 
@@ -192,12 +264,25 @@ The picture is the same. What changed:
 
 ## Known limits
 
-- Close to the ground the detail is limited by NASA's photos (25 cm only near the landing site, about 6 m elsewhere). Rocks smaller than about half a metre are not in the data.
-- Faint lines can show where two photo strips meet in NASA's own mosaics.
-- Trek's terrain service is not a documented public API. If it changes, the 3D ground falls back to a smooth sphere.
+- **It is a prototype for planning**, not a navigation system. No route is called safe.
+- **Routes, heights and slopes exist inside the Jezero height map only.** The Route tool shows that area as a dashed box.
+- **The height map has one value every 20 m.** It cannot see rocks, small holes, dust storms or solar storms. "Bumpy ground" and "pits" mean bumps and dips at that scale.
+- **The weather is not today's.** NASA's public feed stops at 27 April 2024, and it has no wind and no dust numbers. The Briefing shows the date and does not guess the missing numbers.
+- **Radiation is one number for all of Jezero**, measured by the Curiosity rover in another crater. The radiation layer is an estimate from ground height.
+- **Walking time is an estimate.** The space suit factor and the slope rule are assumptions, listed in the Route panel.
+- **Photos limit the detail near the ground**: 25 cm only near the landing site, about 6 m elsewhere. Faint lines can show where two photo strips meet in NASA's own mosaics.
+- **Far from Jezero the 3D ground is coarse** (one height about every 330 m), so the photo can show shadows where the ground model is smooth.
+- **Trek's terrain service is not a documented public API.** If it changes, the 3D ground falls back to a smooth sphere.
+- **Not built from the plan:** the intro fly-in, the mineral (CRISM) layers, contour lines and slope colours, swipe compare. Not tested: phone-size screens.
 
 ---
 
 ## Credits
 
-Images and 3D ground: **NASA/JPL-Caltech Mars Trek**. CTX global mosaic: **NASA/JPL/MSSS, Caltech Murray Lab, Esri**. Elevation model (planned for routes): **USGS Astrogeology**, Mars 2020 landing products. Map engine: **CesiumJS** (Apache-2.0).
+- Photos, 3D ground, night heat and elevation of the planet: **NASA/JPL-Caltech Mars Trek**.
+- CTX global mosaic: **NASA/JPL/MSSS, Caltech Murray Lab, Esri**.
+- Height map of Jezero and the geologic map SIM 3464 (Sun and Stack, 2020): **USGS Astrogeology**.
+- Rover path, rover photos and weather: **NASA/JPL-Caltech, Mars 2020 mission**.
+- Radiation per day: **Curiosity rover, RAD instrument** (Hassler et al., Science, 2014).
+- Map engine: **CesiumJS** (Apache-2.0). Interface rules: Vercel Web Interface Guidelines (MIT).
+- Built by team **Red Compass** for the NASA Space Apps Challenge 2026. The code is under the MIT license (see `LICENSE`).
