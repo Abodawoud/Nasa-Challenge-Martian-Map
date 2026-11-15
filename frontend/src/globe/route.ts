@@ -156,6 +156,21 @@ export function fetchReach(start: LonLat, signal: AbortSignal): Promise<Fetched<
   return ask<ReachAnswer>(`/api/reach?lon=${start.lon.toFixed(6)}&lat=${start.lat.toFixed(6)}`, signal)
 }
 
+/** [west, south, east, north] in degrees. */
+export type Bounds = [number, number, number, number]
+
+/** The area where routes can be worked out: the edges of the backend's height map of Jezero. */
+export async function fetchRouteArea(): Promise<Bounds | undefined> {
+  try {
+    const info = (await (await fetch('/api/dem/info')).json()) as { bounds?: Bounds | null }
+    return info.bounds ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+export const insideArea = (area: Bounds, place: LonLat) => place.lon >= area[0] && place.lon <= area[2] && place.lat >= area[1] && place.lat <= area[3]
+
 /** The colour of each route idea on the map. Chosen to stay apart on Mars-coloured ground. */
 const ROUTE_COLORS: Record<string, string> = {
   shortest: '#e8231f',
@@ -250,14 +265,21 @@ export class RouteTool {
   private selected = ''
   private revealStart = 0
   private reach: Cesium.ImageryLayer | null = null
+  private area: Bounds | null = null
+  private areaPlaces: LonLat[] = []
+  private areaPositions: Cesium.Cartesian3[] = []
+  private areaEntities: Cesium.Entity[] = []
   private reachWanted = 0
   private readonly viewer: Cesium.Viewer
   private readonly onPick: (which: 'start' | 'goal', place: LonLat) => void
+  private readonly onOutside: () => void
   private readonly stops: Array<() => void> = []
 
-  constructor(viewer: Cesium.Viewer, onPick: (which: 'start' | 'goal', place: LonLat) => void) {
+  /** `onOutside` is called when a click falls outside the area where routes work. */
+  constructor(viewer: Cesium.Viewer, onPick: (which: 'start' | 'goal', place: LonLat) => void, onOutside: () => void = () => {}) {
     this.viewer = viewer
     this.onPick = onPick
+    this.onOutside = onOutside
     const canvas = viewer.scene.canvas
     canvas.addEventListener('pointerdown', this.onDown, true)
     canvas.addEventListener('pointerup', this.onUp, true)
@@ -274,6 +296,66 @@ export class RouteTool {
     this.active = active
     this.applyCursor()
     this.applyVisibility()
+  }
+
+  /**
+   * Draw the edge of the area where routes work (a dashed box on the ground, with a label),
+   * so it is clear where a start and a goal can be picked. Clicks outside it are refused.
+   */
+  setArea(area: Bounds) {
+    for (const entity of this.areaEntities) this.viewer.entities.remove(entity)
+    this.area = area
+    const [west, south, east, north] = area
+    // Points along the four edges, close enough together to lie on the hills.
+    const EDGE_STEPS = 60
+    const corners: LonLat[] = [
+      { lon: west, lat: north },
+      { lon: east, lat: north },
+      { lon: east, lat: south },
+      { lon: west, lat: south },
+      { lon: west, lat: north },
+    ]
+    this.areaPlaces = []
+    for (let c = 0; c < 4; c++) {
+      for (let i = 0; i < EDGE_STEPS; i++) {
+        const t = i / EDGE_STEPS
+        this.areaPlaces.push({ lon: corners[c].lon + (corners[c + 1].lon - corners[c].lon) * t, lat: corners[c].lat + (corners[c + 1].lat - corners[c].lat) * t })
+      }
+    }
+    this.areaPlaces.push(corners[4])
+    this.areaPositions = this.areaPlaces.map((place) => drawPosition(this.viewer, place, LIFT_M))
+    const dashed = (alpha: number) => new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.WHITE.withAlpha(alpha), gapColor: NAVY.withAlpha(alpha * 0.6), dashLength: 18 })
+    const labelPlace = { lon: (west + east) / 2, lat: north }
+    this.areaEntities = [
+      this.viewer.entities.add({
+        show: this.active,
+        polyline: {
+          positions: new Cesium.CallbackProperty(() => this.areaPositions, false),
+          width: 3,
+          arcType: Cesium.ArcType.NONE,
+          material: dashed(0.95),
+          depthFailMaterial: dashed(0.4),
+        },
+      }),
+      this.viewer.entities.add({
+        show: this.active,
+        position: new Cesium.CallbackPositionProperty(() => drawPosition(this.viewer, labelPlace, LIFT_M), false),
+        label: {
+          text: 'Routes work inside this box',
+          font: '600 12px Inter, system-ui, sans-serif',
+          fillColor: Cesium.Color.WHITE,
+          style: Cesium.LabelStyle.FILL,
+          showBackground: true,
+          backgroundColor: NAVY.withAlpha(0.9),
+          backgroundPadding: new Cesium.Cartesian2(7, 4),
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          // From very far away the box is a dot: the label would only be in the way.
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 600_000),
+        },
+      }),
+    ]
+    this.viewer.scene.requestRender()
   }
 
   /** Which point the next click on the map sets, or null for none. */
@@ -396,6 +478,7 @@ export class RouteTool {
     if (this.viewer.isDestroyed()) return
     if (this.reach) this.viewer.imageryLayers.remove(this.reach, true)
     for (const route of this.routes) this.viewer.entities.remove(route.entity)
+    for (const entity of this.areaEntities) this.viewer.entities.remove(entity)
     for (const entity of Object.values(this.endEntities)) if (entity) this.viewer.entities.remove(entity)
   }
 
@@ -410,6 +493,7 @@ export class RouteTool {
   private applyVisibility() {
     if (this.viewer.isDestroyed()) return
     for (const entity of Object.values(this.endEntities)) if (entity) entity.show = this.active
+    for (const entity of this.areaEntities) entity.show = this.active
     if (this.reach) this.reach.show = this.active
     this.viewer.scene.requestRender()
   }
@@ -431,12 +515,13 @@ export class RouteTool {
   private reground() {
     if (this.viewer.isDestroyed()) return
     for (const route of this.routes) route.positions = route.places.map((place) => drawPosition(this.viewer, place, LIFT_M))
+    if (this.areaPlaces.length) this.areaPositions = this.areaPlaces.map((place) => drawPosition(this.viewer, place, LIFT_M))
     for (const which of ['start', 'goal'] as const) {
       const place = this.ends[which]
       const entity = this.endEntities[which]
       if (place && entity) entity.position = new Cesium.ConstantPositionProperty(drawPosition(this.viewer, place, LIFT_M))
     }
-    if (this.routes.length) this.viewer.scene.requestRender()
+    if (this.routes.length || this.areaPlaces.length) this.viewer.scene.requestRender()
   }
 
   private position(event: MouseEvent) {
@@ -458,6 +543,9 @@ export class RouteTool {
     // The map was dragged, not clicked.
     if (Math.hypot(position.x - press.x, position.y - press.y) > CLICK_PX) return
     const place = pickPlace(this.viewer, position)
-    if (place) this.onPick(this.picking, place)
+    if (!place) return
+    // Outside the area where routes work: refuse, and let the panel say why.
+    if (this.area && !insideArea(this.area, place)) return this.onOutside()
+    this.onPick(this.picking, place)
   }
 }

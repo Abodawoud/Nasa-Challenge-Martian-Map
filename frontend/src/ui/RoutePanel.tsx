@@ -7,11 +7,11 @@ import type { ReactNode } from 'react'
 import type * as Cesium from 'cesium'
 import { Box, Button, Flex, HStack, IconButton, SimpleGrid, Spinner, Text, VStack } from '@chakra-ui/react'
 import { ArrowUpDown, Award, Clock, Crosshair, Eye, EyeOff, Flag, Footprints, MapPin, Mountain, Radiation, Route, RotateCcw, ShieldAlert, Timer, TrendingUp, TriangleAlert, Waves, Wind } from 'lucide-react'
-import { RADIATION_MSV_PER_DAY, RouteTool, SPACEWALK_LIMIT_S, fetchReach, fetchRoutes, formatDuration, routeColor, sandOnRoute, walkDoseMsv } from '../globe/route'
-import type { Measure, ReachAnswer, RouteAnswer, RouteResult } from '../globe/route'
+import { RADIATION_MSV_PER_DAY, RouteTool, SPACEWALK_LIMIT_S, fetchReach, fetchRouteArea, fetchRoutes, formatDuration, insideArea, routeColor, sandOnRoute, walkDoseMsv } from '../globe/route'
+import type { Bounds, Measure, ReachAnswer, RouteAnswer, RouteResult } from '../globe/route'
 import { waypointStore } from '../globe/identify'
 import { PERSEVERANCE_LANDING } from '../globe/mars'
-import { formatDistance, formatPlace } from '../globe/mapTools'
+import { flyToPlace, formatDistance, formatPlace } from '../globe/mapTools'
 import type { LonLat } from '../globe/mapTools'
 import { unitStore } from '../globe/units'
 import { ToolCard } from './Sidebar'
@@ -59,13 +59,20 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
   /** Metres of loose sand on each route, from the USGS rock map (worked out after the routes arrive). */
   const [sand, setSand] = useState<Record<string, number | undefined>>({})
   const [reach, setReach] = useState<Reach>({ kind: 'off' })
+  /** The area where routes work (the backend's height map), drawn as a dashed box on the map. */
+  const [area, setArea] = useState<Bounds | undefined>()
+  /** True right after a click outside that area. */
+  const [outside, setOutside] = useState(false)
   const saved = useSyncExternalStore(waypointStore.subscribe, waypointStore.get)
   // Reading the units here makes the distances follow the units setting.
   useSyncExternalStore(unitStore.subscribe, unitStore.get)
 
   useEffect(() => {
     if (!viewer) return
-    const created = new RouteTool(viewer, (which, place) => {
+    const created = new RouteTool(
+      viewer,
+      (which, place) => {
+      setOutside(false)
       if (which === 'start') {
         setStart(place)
         // After the start, the next click sets the goal, unless there is one already.
@@ -74,8 +81,16 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
         setGoal(place)
         setPicking(null)
       }
-    })
+      },
+      () => setOutside(true),
+    )
     tool.current = created
+    // The edge of the area where routes work, asked once and drawn on the map.
+    void fetchRouteArea().then((bounds) => {
+      if (!bounds || tool.current !== created) return
+      setArea(bounds)
+      created.setArea(bounds)
+    })
     return () => {
       created.destroy()
       tool.current = null
@@ -182,7 +197,16 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
   const answer = state.kind === 'ready' ? state.answer : undefined
   const routes = answer?.routes ?? []
   const current = routes.find((route) => route.id === selected) ?? routes[0]
-  const places = [...KNOWN_PLACES, ...saved.map((waypoint) => ({ title: waypoint.name, place: { lon: waypoint.lon, lat: waypoint.lat } }))]
+  // Saved places outside the route area cannot be a start or a goal: they are not offered.
+  const places = [...KNOWN_PLACES, ...saved.map((waypoint) => ({ title: waypoint.name, place: { lon: waypoint.lon, lat: waypoint.lat } })).filter((item) => !area || insideArea(area, item.place))]
+  const showArea = () => {
+    if (!viewer || !area) return
+    const metresPerDegree = 59274.7
+    const wide = (area[2] - area[0]) * metresPerDegree * Math.cos((((area[1] + area[3]) / 2) * Math.PI) / 180)
+    const tall = (area[3] - area[1]) * metresPerDegree
+    // The map is wider than it is high, so the height of the box decides how far to step back.
+    flyToPlace(viewer, { lon: (area[0] + area[2]) / 2, lat: (area[1] + area[3]) / 2 }, Math.max(wide, tall * 2.6) * 1.15)
+  }
   const leftOut = [...(answer?.dropped ?? []), ...(answer?.not_found ?? [])]
 
   return (
@@ -191,6 +215,25 @@ export function RoutePanel({ viewer, open, onClose }: Props) {
         <Text fontSize="sm" color="gray.700">
           Choose where to start and where to go. The map creates several routes, checks them, and tells you which one is best.
         </Text>
+        <HStack gap="2" mt="2" align="center">
+          <Box flexShrink={0} w="22px" borderTopWidth="2px" borderTopStyle="dashed" borderColor="gray.600" aria-hidden />
+          <Text flex="1" fontSize="xs" color="gray.600">
+            Routes work inside the dashed box on the map: Jezero Crater, where we have heights.
+          </Text>
+          <Button size="2xs" variant="outline" colorPalette="brand" flexShrink={0} disabled={!area || !viewer} onClick={showArea}>
+            Show the box
+          </Button>
+        </HStack>
+        {outside && (
+          <HStack role="alert" align="flex-start" gap="2" mt="2" p="2" borderRadius="lg" bg="orange.50" borderWidth="1px" borderColor="orange.200">
+            <Box flexShrink={0} mt="0.5" color="orange.700">
+              <TriangleAlert size={14} aria-hidden />
+            </Box>
+            <Text fontSize="xs" color="orange.900">
+              That place is outside the dashed box, so no route can be made there. Click inside the box.
+            </Text>
+          </HStack>
+        )}
       </Box>
 
       <VStack align="stretch" gap="2" px="3" pb="3">

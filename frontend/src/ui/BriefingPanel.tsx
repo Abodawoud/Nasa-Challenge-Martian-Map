@@ -1,10 +1,14 @@
 // The Briefing: what an astronaut walks into at Jezero. Weather from NASA's rover weather
 // station, radiation, daylight, dust and wind, and the ground. Every card says where its
 // number comes from, how old it is, and what is NOT known.
+//
+// How it is written: first what it means for you (four short lines), then one card per
+// subject with one big number, one short sentence, and the long explanation behind
+// "What is this?".
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Box, Button, Flex, HStack, SimpleGrid, Spinner, Text, VStack } from '@chakra-ui/react'
-import { ClipboardList, Gauge, MapPin, Radiation, Route, Sun, Thermometer, TriangleAlert, Wind } from 'lucide-react'
+import { ClipboardList, Clock, Gauge, MapPin, Radiation, Route, Shirt, Sun, Thermometer, TriangleAlert, Wind } from 'lucide-react'
 import { RADIATION_MSV_PER_DAY, SPACEWALK_LIMIT_S, walkDoseMsv } from '../globe/route'
 import { EARTH_PRESSURE_PA, inDustSeason, loadWeather } from '../globe/weather'
 import type { WeatherSol } from '../globe/weather'
@@ -14,7 +18,7 @@ import type { Tool } from './Sidebar'
 const whole = new Intl.NumberFormat('en', { maximumFractionDigits: 0 })
 const one = new Intl.NumberFormat('en', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 const two = new Intl.NumberFormat('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const longDate = new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+const longDate = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 
 type Weather = { state: 'loading' } | { state: 'error' } | { state: 'ready'; sols: WeatherSol[] }
 
@@ -37,60 +41,86 @@ export function BriefingPanel({ onClose, onOpenTool }: { onClose: () => void; on
   const latest = [...sols].reverse().find((sol) => sol.minTempC !== null && sol.maxTempC !== null) ?? sols[sols.length - 1]
   const dust = latest ? inDustSeason(latest.solarLongitude) : undefined
   const spacewalkDose = walkDoseMsv(SPACEWALK_LIMIT_S)
+  const loading = weather.state === 'loading'
 
   return (
     <ToolCard id="tool-briefing" title="Briefing" icon={<ClipboardList size={16} aria-hidden />} onClose={onClose} width="440px">
-      <Box px="4" py="3" bg="brand.700" color="white">
-        <Text fontSize="2xs" fontWeight="700" letterSpacing="0.08em" textTransform="uppercase" color="whiteAlpha.700">
+      <Box px="5" py="4" bg="brand.700" color="white">
+        <Text fontSize="xs" fontWeight="600" letterSpacing="0.1em" textTransform="uppercase" color="whiteAlpha.700">
           Before you go outside
         </Text>
-        <Text fontSize="lg" fontWeight="700" lineHeight="1.3">
+        <Text fontSize="xl" fontWeight="700" lineHeight="1.3" mt="0.5">
           Jezero Crater, Mars
-        </Text>
-        <Text fontSize="xs" color="whiteAlpha.800" mt="0.5">
-          What you walk into: cold, thin air, radiation, dust. Real NASA numbers where they exist. Where they do not, this page says so.
         </Text>
       </Box>
 
-      {/* The quick read */}
+      {/* The quick read: three numbers */}
       <SimpleGrid columns={3} bg="white" borderBottomWidth="1px" borderColor="gray.200">
-        <Quick label="Air temperature" loading={weather.state === 'loading'} value={latest?.maxTempC != null && latest.minTempC != null ? `${whole.format(latest.minTempC)} to ${whole.format(latest.maxTempC)} °C` : 'No data'} tone="blue" />
-        <Quick label="Radiation" value={`${RADIATION_MSV_PER_DAY} mSv a day`} tone="orange" divider />
-        <Quick label="Dust storm season" loading={weather.state === 'loading'} value={dust === undefined ? 'No data' : dust ? 'Yes' : 'No'} tone={dust ? 'orange' : 'green'} divider />
+        <Quick
+          icon={<Thermometer size={14} aria-hidden />}
+          label="Air"
+          loading={loading}
+          value={latest?.maxTempC != null && latest.minTempC != null ? `${whole.format(latest.minTempC)}° to ${whole.format(latest.maxTempC)}°` : 'No data'}
+          unit={latest?.maxTempC != null ? 'Celsius, night to day' : undefined}
+        />
+        <Quick icon={<Radiation size={14} aria-hidden />} label="Radiation" value={`${RADIATION_MSV_PER_DAY} mSv`} unit="every day" divider />
+        <Quick icon={<Wind size={14} aria-hidden />} label="Dust storms" loading={loading} value={dust === undefined ? 'No data' : dust ? 'In season' : 'Off season'} unit={dust === undefined ? undefined : dust ? 'more likely now' : 'less likely now'} divider />
       </SimpleGrid>
 
-      <VStack align="stretch" gap="2.5" p="3" bg="gray.50">
-        <Card icon={<Thermometer size={16} aria-hidden />} title="Weather at Jezero" tag="NASA rover weather station">
-          {weather.state === 'loading' && (
+      <VStack align="stretch" gap="3" p="3" bg="gray.50">
+        {/* What it means, in plain actions */}
+        <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" px="4" py="3.5" shadow="xs">
+          <Text as="h3" fontSize="sm" fontWeight="700" color="gray.900" mb="2.5">
+            What it means for you
+          </Text>
+          <VStack as="ul" align="stretch" gap="2.5" listStyleType="none">
+            <Advice icon={<Shirt size={15} aria-hidden />} title="Always wear the suit." text="The air is too thin to breathe and far below freezing." />
+            <Advice
+              icon={<Sun size={15} aria-hidden />}
+              title={latest?.sunset ? `Be back before ${latest.sunset}.` : 'Be back before sunset.'}
+              text="After sunset it is dark and much colder."
+            />
+            <Advice icon={<Clock size={15} aria-hidden />} title="Keep walks short." text="Radiation adds up with every hour outside." />
+            <Advice
+              icon={<Wind size={15} aria-hidden />}
+              title={dust ? 'Watch for dust.' : 'Dust is less likely now.'}
+              text={dust ? 'It is the season of dust storms on Mars.' : 'It is not the season of dust storms.'}
+            />
+          </VStack>
+        </Box>
+
+        <Card icon={<Thermometer size={16} aria-hidden />} title="Weather" tag="NASA rover weather station">
+          {loading && (
             <HStack gap="2" fontSize="sm" color="gray.600">
               <Spinner size="xs" />
               <Text>Loading from NASA…</Text>
             </HStack>
           )}
-          {weather.state === 'error' && (
-            <Text fontSize="sm" color="red.700">
-              NASA&rsquo;s weather feed could not be reached.
-            </Text>
-          )}
+          {weather.state === 'error' && <Body tone="red">NASA&rsquo;s weather feed could not be reached.</Body>}
           {latest && (
             <>
-              <HStack align="flex-start" gap="2" p="2" mb="2.5" borderRadius="lg" bg="orange.50" borderWidth="1px" borderColor="orange.200">
+              <HStack align="flex-start" gap="2.5" px="3" py="2.5" mb="3" borderRadius="lg" bg="orange.50" borderWidth="1px" borderColor="orange.200">
                 <Box flexShrink={0} mt="0.5" color="orange.700">
-                  <TriangleAlert size={14} aria-hidden />
+                  <TriangleAlert size={15} aria-hidden />
                 </Box>
-                <Text fontSize="xs" color="orange.900">
-                  This is the <b>newest reading NASA has published</b>: Mars day {latest.sol} of the mission, {longDate.format(new Date(`${latest.date}T00:00:00Z`))}. It is not today&rsquo;s weather.
-                </Text>
+                <Box>
+                  <Text fontSize="sm" fontWeight="700" color="orange.900" lineHeight="1.4">
+                    Not today&rsquo;s weather
+                  </Text>
+                  <Text fontSize="xs" color="orange.900" lineHeight="1.5">
+                    NASA&rsquo;s newest reading is from {longDate.format(new Date(`${latest.date}T00:00:00Z`))} (Mars day {latest.sol}).
+                  </Text>
+                </Box>
               </HStack>
-              <SimpleGrid columns={2} gap="2">
-                <Figure label="Coldest in the night" value={latest.minTempC !== null ? `${one.format(latest.minTempC)} °C` : '–'} />
-                <Figure label="Warmest in the day" value={latest.maxTempC !== null ? `${one.format(latest.maxTempC)} °C` : '–'} />
-                <Figure label="Air pressure" value={latest.pressurePa !== null ? `${whole.format(latest.pressurePa)} Pa` : '–'} note={latest.pressurePa !== null ? `${one.format((latest.pressurePa / EARTH_PRESSURE_PA) * 100)}% of the air pressure on Earth` : undefined} />
-                <Figure label="Season" value={latest.season ? latest.season[0].toUpperCase() + latest.season.slice(1) : '–'} note="in the north of Mars" />
+              <SimpleGrid columns={2} gap="2.5">
+                <Figure label="Coldest, at night" value={latest.minTempC !== null ? `${one.format(latest.minTempC)} °C` : '–'} />
+                <Figure label="Warmest, by day" value={latest.maxTempC !== null ? `${one.format(latest.maxTempC)} °C` : '–'} />
+                <Figure label="Air pressure" value={latest.pressurePa !== null ? `${whole.format(latest.pressurePa)} Pa` : '–'} note={latest.pressurePa !== null ? `${one.format((latest.pressurePa / EARTH_PRESSURE_PA) * 100)}% of Earth’s` : undefined} />
+                <Figure label="Season" value={latest.season ? latest.season[0].toUpperCase() + latest.season.slice(1) : '–'} note="north of Mars" />
               </SimpleGrid>
               {sols.length > 1 && <TempChart sols={sols} />}
               <More>
-                The numbers come from the weather station on the Perseverance rover, which stands in Jezero. The air is almost all carbon dioxide and far too thin to breathe: a space suit is always needed. The pressure is given in pascal (Pa).
+                The numbers come from the weather station on the Perseverance rover, which stands in Jezero. The air is almost all carbon dioxide. &ldquo;Pa&rdquo; means pascal, the unit of air pressure.
               </More>
             </>
           )}
@@ -99,66 +129,56 @@ export function BriefingPanel({ onClose, onOpenTool }: { onClose: () => void; on
         <Card icon={<Sun size={16} aria-hidden />} title="Daylight" tag="NASA rover weather station">
           {latest?.daylightHours != null ? (
             <>
+              <BigNumber value={`${one.format(latest.daylightHours)} hours`} unit="of sunlight" />
               <DayBar sunrise={latest.sunrise} sunset={latest.sunset} />
-              <Text fontSize="sm" color="gray.800" mt="2">
-                The Sun is up for about <b>{one.format(latest.daylightHours)} hours</b>, from {latest.sunrise} to {latest.sunset} local time.
-              </Text>
-              <More>
-                A day on Mars (a &ldquo;sol&rdquo;) lasts 24 hours and 37 minutes. Plan a walk so that you are back before sunset: the night is very cold and dark. The times are from the same NASA reading as the weather above.
-              </More>
+              <Body>
+                The Sun rises at <b>{latest.sunrise}</b> and sets at <b>{latest.sunset}</b>, local time.
+              </Body>
+              <More>A day on Mars is called a &ldquo;sol&rdquo; and lasts 24 hours and 37 minutes. The times are from the same NASA reading as the weather.</More>
             </>
           ) : (
-            <Text fontSize="sm" color="gray.600">
-              {weather.state === 'loading' ? 'Loading…' : 'No sunrise and sunset times available.'}
-            </Text>
+            <Body tone="gray">{loading ? 'Loading…' : 'No sunrise and sunset times available.'}</Body>
           )}
         </Card>
 
-        <Card icon={<Radiation size={16} aria-hidden />} title="Radiation" tag="Measured by the Curiosity rover">
-          <HStack align="baseline" gap="2">
-            <Text fontSize="2xl" fontWeight="700" color="gray.900" lineHeight="1.2" fontVariantNumeric="tabular-nums">
-              {RADIATION_MSV_PER_DAY} mSv
-            </Text>
-            <Text fontSize="sm" color="gray.700">
-              per day on the surface
-            </Text>
-          </HStack>
-          <Text fontSize="sm" color="gray.800" mt="1.5">
-            One spacewalk of 8 hours gives about <b>{two.format(spacewalkDose)} mSv</b>. The level is nearly the same everywhere in Jezero, so the way to get less is to spend less time outside.
-          </Text>
+        <Card icon={<Radiation size={16} aria-hidden />} title="Radiation" tag="Curiosity rover, an estimate here">
+          <BigNumber value={`${RADIATION_MSV_PER_DAY} mSv`} unit="per day on the surface" />
+          <Body>
+            One 8-hour spacewalk gives about <b>{two.format(spacewalkDose)} mSv</b>.
+          </Body>
+          <Body>The level is nearly the same everywhere in Jezero. Less time outside means less radiation.</Body>
           <More>
-            Mars has almost no air and no magnetic field to stop cosmic rays. The number was measured by NASA&rsquo;s Curiosity rover in Gale Crater, which is about as low as Jezero. We use it here as an estimate. It does not include solar storms, which can raise the dose for a few hours. To see where the planet gets more or less, switch on &ldquo;Cosmic radiation (estimate)&rdquo; in Layers.
+            Mars has almost no air and no magnetic field to stop cosmic rays. NASA&rsquo;s Curiosity rover measured this number in Gale Crater, which lies about as low as Jezero. Solar storms can raise it for a few hours and are not counted. The layer &ldquo;Cosmic radiation (estimate)&rdquo; shows where the planet gets more or less.
           </More>
-          <Button size="xs" variant="outline" colorPalette="brand" mt="2" onClick={() => onOpenTool('layers')}>
-            Open Layers
-          </Button>
+          <Actions>
+            <Button size="xs" variant="outline" colorPalette="brand" onClick={() => onOpenTool('layers')}>
+              See the radiation layer
+            </Button>
+          </Actions>
         </Card>
 
         <Card icon={<Wind size={16} aria-hidden />} title="Wind and dust" tag="Partly known">
-          <VStack align="stretch" gap="2">
+          <VStack align="stretch" gap="3">
             <Line
               tone={dust === undefined ? 'gray' : dust ? 'orange' : 'green'}
-              title={dust === undefined ? 'Dust storm season: no data' : dust ? 'It is dust storm season' : 'It is not dust storm season'}
-              text={
-                latest
-                  ? `At the newest reading Mars was at ${whole.format(latest.solarLongitude)}° of its year. Dust storms are most common between 180° and 360°. This is a rule for the whole planet, not a forecast for Jezero.`
-                  : 'The season comes from NASA’s weather feed, which could not be read.'
-              }
+              title={dust === undefined ? 'Dust storm season: no data' : dust ? 'Dust storm season: yes' : 'Dust storm season: no'}
+              text={latest ? 'A rule for the whole planet, from where Mars is in its year. It is not a forecast for Jezero.' : 'The season comes from NASA’s weather feed, which could not be read.'}
             />
-            <Line tone="gray" title="Wind speed and dust in the air: not known" text="NASA's public weather feed for Jezero has no wind and no dust numbers. This page does not guess them." />
-            <Line tone="orange" title="Loose sand on the ground: mapped" text="The USGS rock map marks wind-blown sand ripples (yellow in the Geologic units layer). Feet and wheels sink there. The Route tool tells you how much of a walk crosses them." />
+            <Line tone="gray" title="Wind and dust in the air: not known" text="NASA’s public feed for Jezero has no wind and no dust numbers. We do not guess them." />
+            <Line tone="orange" title="Loose sand on the ground: mapped" text="Feet and wheels sink in it. The Route tool counts how much of a walk crosses sand." />
           </VStack>
+          <More>
+            Dust storms are most common when Mars is between 180° and 360° of its way around the Sun.{latest ? ` At NASA’s newest reading it was at ${whole.format(latest.solarLongitude)}°.` : ''} The sand comes from the USGS rock map: it is the yellow colour in the &ldquo;Geologic units&rdquo; layer.
+          </More>
         </Card>
 
         <Card icon={<Gauge size={16} aria-hidden />} title="The ground" tag="Facts about Mars">
-          <SimpleGrid columns={2} gap="2">
-            <Figure label="Gravity" value="3.71 m/s²" note="38% of Earth: you weigh much less" />
-            <Figure label="Height of the crater floor" value="about −2,600 m" note="below Mars's zero level" />
+          <SimpleGrid columns={2} gap="2.5">
+            <Figure label="Gravity" value="3.71 m/s²" note="38% of Earth’s" />
+            <Figure label="Crater floor" value="−2,600 m" note="about, below Mars’s zero level" />
           </SimpleGrid>
-          <Text fontSize="sm" color="gray.800" mt="2">
-            The ground changes from place to place: flat crater floor, the steep front of the old river delta, the crater rim.
-          </Text>
-          <HStack gap="2" mt="2" wrap="wrap">
+          <Body>You weigh much less than on Earth. The ground goes from flat crater floor to the steep front of the old river delta.</Body>
+          <Actions>
             <Button size="xs" variant="outline" colorPalette="brand" onClick={() => onOpenTool('identify')}>
               <MapPin size={14} aria-hidden />
               Check one place
@@ -167,64 +187,123 @@ export function BriefingPanel({ onClose, onOpenTool }: { onClose: () => void; on
               <Route size={14} aria-hidden />
               Plan a walk
             </Button>
-          </HStack>
+          </Actions>
         </Card>
       </VStack>
     </ToolCard>
   )
 }
 
-/** One of the three things in the top row. */
-function Quick({ label, value, tone, divider, loading }: { label: string; value: string; tone: 'blue' | 'orange' | 'green'; divider?: boolean; loading?: boolean }) {
+/** One of the three things in the top row: a label, the value on one line, the unit under it. */
+function Quick({ icon, label, value, unit, divider, loading }: { icon: ReactNode; label: string; value: string; unit?: string; divider?: boolean; loading?: boolean }) {
   return (
-    <Box px="3" py="2.5" minW="0" borderLeftWidth={divider ? '1px' : undefined} borderColor="gray.200">
-      <Text fontSize="2xs" fontWeight="600" color="gray.600" lineHeight="1.3">
-        {label}
-      </Text>
+    <Box px="3.5" py="3" minW="0" borderLeftWidth={divider ? '1px' : undefined} borderColor="gray.200">
+      <HStack gap="1.5" color="gray.600">
+        {icon}
+        <Text fontSize="xs" fontWeight="600">
+          {label}
+        </Text>
+      </HStack>
       {loading ? (
-        <Spinner size="xs" mt="1.5" color="gray.500" />
+        <Spinner size="xs" mt="2" color="gray.500" />
       ) : (
-        <HStack gap="1.5" mt="1" align="center">
-          <Box flexShrink={0} boxSize="8px" borderRadius="full" bg={`${tone}.500`} aria-hidden />
-          <Text fontSize="sm" fontWeight="700" color={value === 'No data' ? 'gray.500' : 'gray.900'} lineHeight="1.25" fontVariantNumeric="tabular-nums">
+        <>
+          <Text mt="1" fontSize="md" fontWeight="700" color={value === 'No data' ? 'gray.500' : 'gray.900'} lineHeight="1.3" whiteSpace="nowrap" fontVariantNumeric="tabular-nums">
             {value}
           </Text>
-        </HStack>
+          {unit && (
+            <Text fontSize="2xs" color="gray.600" lineHeight="1.4">
+              {unit}
+            </Text>
+          )}
+        </>
       )}
     </Box>
   )
 }
 
-function Card({ icon, title, tag, children }: { icon: ReactNode; title: string; tag: string; children: ReactNode }) {
+/** One line of "What it means for you": what to do, then why. */
+function Advice({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
   return (
-    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" px="3.5" py="3" shadow="xs">
-      <Flex align="center" gap="2" mb="2">
-        <Flex flexShrink={0} align="center" justify="center" boxSize="7" borderRadius="full" bg="brand.50" color="brand.700">
-          {icon}
-        </Flex>
-        <Text as="h3" flex="1" fontSize="sm" fontWeight="700" color="gray.900">
+    <HStack as="li" align="flex-start" gap="3">
+      <Flex flexShrink={0} align="center" justify="center" boxSize="8" borderRadius="full" bg="brand.50" color="brand.700">
+        {icon}
+      </Flex>
+      <Box>
+        <Text fontSize="sm" fontWeight="700" color="gray.900" lineHeight="1.4">
           {title}
         </Text>
-        <Text flexShrink={0} fontSize="2xs" color="gray.500" px="1.5" py="0.5" borderRadius="full" bg="gray.100">
-          {tag}
+        <Text fontSize="xs" color="gray.700" lineHeight="1.5">
+          {text}
         </Text>
+      </Box>
+    </HStack>
+  )
+}
+
+function Card({ icon, title, tag, children }: { icon: ReactNode; title: string; tag: string; children: ReactNode }) {
+  return (
+    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" px="4" py="3.5" shadow="xs">
+      <Flex align="center" gap="2.5" mb="3">
+        <Flex flexShrink={0} align="center" justify="center" boxSize="8" borderRadius="full" bg="brand.50" color="brand.700">
+          {icon}
+        </Flex>
+        <Box flex="1" minW="0">
+          <Text as="h3" fontSize="md" fontWeight="700" color="gray.900" lineHeight="1.3">
+            {title}
+          </Text>
+          <Text fontSize="2xs" color="gray.500" lineHeight="1.4">
+            Source: {tag}
+          </Text>
+        </Box>
       </Flex>
       {children}
     </Box>
   )
 }
 
+/** The one number a card is about. */
+function BigNumber({ value, unit }: { value: string; unit: string }) {
+  return (
+    <HStack align="baseline" gap="2" mb="2.5" wrap="wrap">
+      <Text fontSize="2xl" fontWeight="700" color="gray.900" lineHeight="1.2" whiteSpace="nowrap" fontVariantNumeric="tabular-nums">
+        {value}
+      </Text>
+      <Text fontSize="sm" color="gray.600">
+        {unit}
+      </Text>
+    </HStack>
+  )
+}
+
+/** A sentence of a card: comfortable to read. */
+function Body({ children, tone = 'dark' }: { children: ReactNode; tone?: 'dark' | 'gray' | 'red' }) {
+  return (
+    <Text fontSize="sm" color={tone === 'red' ? 'red.700' : tone === 'gray' ? 'gray.600' : 'gray.800'} lineHeight="1.55" mt="2.5" css={{ textWrap: 'pretty' }}>
+      {children}
+    </Text>
+  )
+}
+
+function Actions({ children }: { children: ReactNode }) {
+  return (
+    <HStack gap="2" mt="3" wrap="wrap">
+      {children}
+    </HStack>
+  )
+}
+
 function Figure({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <Box borderWidth="1px" borderColor="gray.200" borderRadius="lg" px="2.5" py="2">
-      <Text fontSize="xs" fontWeight="600" color="gray.600">
+    <Box borderWidth="1px" borderColor="gray.200" borderRadius="lg" px="3" py="2.5" bg="gray.50">
+      <Text fontSize="xs" color="gray.600" lineHeight="1.4">
         {label}
       </Text>
-      <Text fontSize="lg" fontWeight="700" color="gray.900" lineHeight="1.25" fontVariantNumeric="tabular-nums">
+      <Text mt="0.5" fontSize="lg" fontWeight="700" color="gray.900" lineHeight="1.3" whiteSpace="nowrap" fontVariantNumeric="tabular-nums">
         {value}
       </Text>
       {note && (
-        <Text fontSize="2xs" color="gray.500" lineHeight="1.3">
+        <Text fontSize="2xs" color="gray.500" lineHeight="1.4">
           {note}
         </Text>
       )}
@@ -235,11 +314,11 @@ function Figure({ label, value, note }: { label: string; value: string; note?: s
 /** One statement with a coloured edge: green = fine, orange = take care, grey = not known. */
 function Line({ tone, title, text }: { tone: 'green' | 'orange' | 'gray'; title: string; text: string }) {
   return (
-    <Box pl="2.5" borderLeftWidth="4px" borderColor={tone === 'gray' ? 'gray.300' : `${tone}.400`}>
-      <Text fontSize="sm" fontWeight="700" color="gray.900">
+    <Box pl="3" borderLeftWidth="4px" borderColor={tone === 'gray' ? 'gray.300' : `${tone}.400`}>
+      <Text fontSize="sm" fontWeight="700" color="gray.900" lineHeight="1.4">
         {title}
       </Text>
-      <Text fontSize="xs" color="gray.700">
+      <Text fontSize="xs" color="gray.700" lineHeight="1.5" mt="0.5" css={{ textWrap: 'pretty' }}>
         {text}
       </Text>
     </Box>
@@ -249,12 +328,12 @@ function Line({ tone, title, text }: { tone: 'green' | 'orange' | 'gray'; title:
 /** The longer explanation, closed until asked for. */
 function More({ children }: { children: ReactNode }) {
   return (
-    <Box asChild mt="2.5" pt="2" borderTopWidth="1px" borderColor="gray.100">
+    <Box asChild mt="3" pt="2.5" borderTopWidth="1px" borderColor="gray.100">
       <details>
         <Box asChild cursor="pointer" fontSize="xs" fontWeight="600" color="brand.600" _hover={{ textDecoration: 'underline' }}>
           <summary>What is this?</summary>
         </Box>
-        <Text fontSize="xs" color="gray.700" mt="1.5" lineHeight="1.5">
+        <Text fontSize="xs" color="gray.700" mt="2" lineHeight="1.6" css={{ textWrap: 'pretty' }}>
           {children}
         </Text>
       </details>
@@ -275,14 +354,14 @@ function DayBar({ sunrise, sunset }: { sunrise: string; sunset: string }) {
       <Box position="relative" h="14px" borderRadius="full" bg="#1b2440" overflow="hidden">
         <Box position="absolute" top="0" bottom="0" left={`${from}%`} w={`${to - from}%`} bgGradient="to-r" gradientFrom="#f6c66b" gradientVia="#fde9b0" gradientTo="#f6c66b" />
       </Box>
-      <Flex position="relative" h="16px" mt="0.5" fontSize="2xs" color="gray.600" fontVariantNumeric="tabular-nums">
+      <Flex position="relative" h="18px" mt="1" fontSize="2xs" color="gray.500" fontVariantNumeric="tabular-nums">
         <Text position="absolute" left="0">
           00:00
         </Text>
-        <Text position="absolute" left={`${from}%`} transform="translateX(-50%)" fontWeight="600" color="gray.800">
+        <Text position="absolute" left={`${from}%`} transform="translateX(-50%)" fontWeight="700" color="gray.800">
           {sunrise}
         </Text>
-        <Text position="absolute" left={`${to}%`} transform="translateX(-50%)" fontWeight="600" color="gray.800">
+        <Text position="absolute" left={`${to}%`} transform="translateX(-50%)" fontWeight="700" color="gray.800">
           {sunset}
         </Text>
         <Text position="absolute" right="0">
@@ -306,9 +385,9 @@ function TempChart({ sols }: { sols: WeatherSol[] }) {
   const y = (temp: number) => top + (H - top - bottom) * (1 - (temp - low) / (high - low || 1))
   const slot = W / shown.length
   return (
-    <Box mt="3">
-      <Text fontSize="xs" fontWeight="600" color="gray.700" mb="1">
-        Night and day temperature, last {shown.length} readings
+    <Box mt="4">
+      <Text fontSize="xs" fontWeight="600" color="gray.700" mb="1.5">
+        Last {shown.length} readings: warmest by day, coldest at night (°C)
       </Text>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`Air temperature of the last ${shown.length} readings: between ${whole.format(low)} and ${whole.format(high)} degrees Celsius.`} style={{ display: 'block' }}>
         {shown.map((sol, i) => {
@@ -323,7 +402,7 @@ function TempChart({ sols }: { sols: WeatherSol[] }) {
                 {whole.format(sol.minTempC!)}°
               </text>
               <text x={x} y={H - 4} textAnchor="middle" fontSize="9" fill="#6b7280" fontFamily="Inter, system-ui, sans-serif">
-                sol {sol.sol}
+                day {sol.sol}
               </text>
             </g>
           )
