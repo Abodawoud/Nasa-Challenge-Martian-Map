@@ -7,11 +7,11 @@ import type { ReactNode } from 'react'
 import type * as CesiumTypes from 'cesium'
 import * as Cesium from 'cesium'
 import { Box, Flex, IconButton, Link, Text, VStack } from '@chakra-ui/react'
-import { BookOpen, ExternalLink, Layers, ListTree, MapPinned, X } from 'lucide-react'
+import { BookOpen, ExternalLink, Layers, ListTree, MapPinned, MousePointerClick, Ruler, X } from 'lucide-react'
 import { MARS_ELLIPSOID, PERSEVERANCE_LANDING } from '../globe/mars'
 import { flyToJezero } from '../globe/MarsViewer'
 
-export type Tool = 'layers' | 'places' | 'sources'
+export type Tool = 'layers' | 'measure' | 'identify' | 'places' | 'sources'
 
 interface RailProps {
   tool: Tool | null
@@ -26,11 +26,13 @@ interface RailProps {
 export function ToolRail({ tool, onTool, legendOpen, onLegend, layerCount }: RailProps) {
   const tools: Array<{ id: Tool; label: string; icon: ReactNode; badge?: number }> = [
     { id: 'layers', label: 'Layers', icon: <Layers size={19} aria-hidden />, badge: layerCount },
+    { id: 'measure', label: 'Measure', icon: <Ruler size={19} aria-hidden /> },
+    { id: 'identify', label: 'Identify', icon: <MousePointerClick size={19} aria-hidden /> },
     { id: 'places', label: 'Places', icon: <MapPinned size={19} aria-hidden /> },
     { id: 'sources', label: 'Sources', icon: <BookOpen size={19} aria-hidden /> },
   ]
   return (
-    <VStack as="nav" aria-label="Map tools" gap="1" py="2" px="1.5" w="60px" flexShrink={0} bg="brand.800" borderRightWidth="1px" borderColor="whiteAlpha.200" zIndex="1">
+    <VStack as="nav" aria-label="Map tools" gap="1" py="2" px="1.5" w="64px" flexShrink={0} bg="brand.800" borderRightWidth="1px" borderColor="whiteAlpha.200" zIndex="1">
       {tools.map(({ id, label, icon, badge }) => (
         <RailButton key={id} label={label} active={tool === id} controls={`tool-${id}`} onClick={() => onTool(tool === id ? null : id)} badge={badge}>
           {icon}

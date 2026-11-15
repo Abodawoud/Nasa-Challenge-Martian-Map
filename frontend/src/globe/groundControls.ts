@@ -13,6 +13,7 @@
 //   Shift + drag         free look (Cesium's own, unchanged)
 //
 // Far from the ground (the whole globe) Cesium's own controls are used: they work well there.
+import { toolInput } from './mapTools'
 import * as Cesium from 'cesium'
 
 /** Below this height above the ground, these controls replace Cesium's drag and tilt. */
@@ -141,6 +142,8 @@ export function installGroundControls(
   }
 
   const onPointerDown = (event: PointerEvent) => {
+    // A map tool is dragging one of its points: the map stays still.
+    if (toolInput.dragging) return
     if (!active() || event.shiftKey) return
     const wantsOrbit = event.button === 1 || (event.button === 0 && event.ctrlKey)
     if (event.button !== 0 && !wantsOrbit) return
@@ -215,9 +218,9 @@ export function installGroundControls(
       ssc.enableRotate = !ours
       ssc.enableTilt = !ours
       ssc.enableTranslate = !ours
-      if (!drag) canvas.style.cursor = ours ? 'grab' : ''
+      if (!drag) canvas.style.cursor = toolInput.cursor || (ours ? 'grab' : '')
     } else if (!drag) {
-      canvas.style.cursor = ''
+      canvas.style.cursor = toolInput.cursor
     }
 
     if (glide && !drag) {

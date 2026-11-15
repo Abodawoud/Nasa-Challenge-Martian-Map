@@ -9,6 +9,7 @@ import { MapControls } from './ui/MapControls'
 import { LayersPanel } from './ui/LayersPanel'
 import { MapLegend } from './ui/MapLegend'
 import { PlacesPanel, SourcesPanel, ToolRail } from './ui/Sidebar'
+import { MeasurePanel } from './ui/MeasurePanel'
 import type { Tool } from './ui/Sidebar'
 import { CompassStar } from './ui/CompassStar'
 import { visibleTilesLoaded } from './globe/preload'
@@ -165,6 +166,7 @@ export default function App() {
         <Box className="mars-space" position="relative" flex="1" minW="0" minH="0" overflow="hidden">
           <MarsViewer onReady={onReady} onCursor={setCursor} onTerrainStatus={setTerrain} />
           <LayersPanel viewer={viewer} onActiveChange={setActiveLayers} open={tool === 'layers'} onClose={closeTool} />
+          <MeasurePanel viewer={viewer} open={tool === 'measure'} onClose={closeTool} />
           {tool === 'places' && <PlacesPanel viewer={viewer} onClose={closeTool} />}
           {tool === 'sources' && <SourcesPanel onClose={closeTool} />}
           <MapLegend activeLayers={activeLayers} open={legendOpen} onClose={() => setLegendOpen(false)} />
