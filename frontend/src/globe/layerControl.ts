@@ -11,11 +11,29 @@ import type { PanelLayer } from './layers.config'
 import { createRoverPathLayer, loadRoverPath } from './pathLayer'
 import { createGeologyLayer, loadGeology } from './geologyLayer'
 
+/** A layer that was built on first use. */
+interface BuiltLayer {
+  layer: Cesium.ImageryLayer
+  marker?: Cesium.Entity
+  info?: string
+  /** The whole layer is shown (the switch in Layers and the eye in the TOC). */
+  visible?: boolean
+  /** Rover path: parts hidden by themselves in the TOC ('line', 'marker'). */
+  hiddenParts?: Set<string>
+}
+
+/** Show the parts of a built layer that are neither hidden as a whole nor by themselves. */
+function applyVisible(built: BuiltLayer) {
+  const visible = built.visible ?? true
+  built.layer.show = visible && !built.hiddenParts?.has('line')
+  if (built.marker) built.marker.show = visible && !built.hiddenParts?.has('marker')
+}
+
 interface ViewerLayers {
   /** The photo and heat layers MarsViewer made from IMAGERY_LAYERS, by id. */
   imagery: Map<string, Cesium.ImageryLayer>
   /** Layers built on first use (rover path, geologic map), by panel id. */
-  built: Map<string, { layer: Cesium.ImageryLayer; marker?: Cesium.Entity; info?: string }>
+  built: Map<string, BuiltLayer>
   /** Being built right now, so two fast clicks build a layer once. */
   building: Map<string, Promise<void>>
 }
@@ -152,9 +170,9 @@ export async function setLayerVisible(viewer: Cesium.Viewer, entry: PanelLayer, 
     }
     const built = layers.built.get(entry.id)
     if (built) {
-      built.layer.show = visible
+      built.visible = visible
       built.layer.alpha = alpha
-      if (built.marker) built.marker.show = visible
+      applyVisible(built)
       info = built.info
     }
   }
@@ -174,6 +192,36 @@ export function setLayerOpacity(viewer: Cesium.Viewer, entry: PanelLayer, alpha:
   } else {
     const built = layers.built.get(entry.id)
     if (built) built.layer.alpha = alpha
+  }
+  viewer.scene.requestRender()
+}
+
+/**
+ * Hide single kinds inside one layer, by themselves (the eyes beside the legend entries in the
+ * TOC). `keys`: for a geologic map layer, the kinds to leave out. `parts`: for the rover path,
+ * 'line' and / or 'marker'. Does nothing for a layer that was never switched on.
+ *
+ * A geologic layer is painted again without the hidden kinds: its tiles are thrown away and
+ * made new, which takes a moment for the tiles on screen only.
+ */
+export async function setLayerItemsHidden(viewer: Cesium.Viewer, entry: PanelLayer, keys: string[], parts: string[]) {
+  if (viewer.isDestroyed()) return
+  const layers = layersOf(viewer)
+  const built = layers.built.get(entry.id)
+  if (!built) return
+  if (entry.kind === 'rover-path') {
+    built.hiddenParts = new Set(parts)
+    applyVisible(built)
+  } else if (entry.kind === 'geology') {
+    const shapes = await loadGeology(entry.geology) // already downloaded: answers at once
+    if (viewer.isDestroyed()) return
+    const next = createGeologyLayer(shapes, entry.geology, new Set(keys))
+    next.alpha = built.layer.alpha
+    viewer.imageryLayers.remove(built.layer, true)
+    viewer.imageryLayers.add(next)
+    built.layer = next
+    applyVisible(built)
+    restack(viewer, layers)
   }
   viewer.scene.requestRender()
 }

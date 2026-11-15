@@ -133,8 +133,11 @@ export async function geologyBounds(source: GeologySource): Promise<[number, num
   return [Math.min(...shapes.map((s) => s.west)), Math.min(...shapes.map((s) => s.south)), Math.max(...shapes.map((s) => s.east)), Math.max(...shapes.map((s) => s.north))]
 }
 
-/** An imagery layer that paints the shapes. */
-export function createGeologyLayer(shapes: Shape[], source: GeologySource): Cesium.ImageryLayer {
+/**
+ * An imagery layer that paints the shapes. Shapes whose key is in `hidden` are left out
+ * (the TOC can hide single kinds, for example one rock unit).
+ */
+export function createGeologyLayer(shapes: Shape[], source: GeologySource, hidden: ReadonlySet<string> = new Set()): Cesium.ImageryLayer {
   const PAD = 0.01
   const west = Math.min(...shapes.map((s) => s.west))
   const south = Math.min(...shapes.map((s) => s.south))
@@ -164,7 +167,8 @@ export function createGeologyLayer(shapes: Shape[], source: GeologySource): Cesi
     const reachLon = 12 / perLon
     const reachLat = 12 / perLat
     const inside = shapes.filter(
-      (s) => s.east >= tileWest - reachLon && s.west <= tileEast + reachLon && s.north >= tileSouth - reachLat && s.south <= tileNorth + reachLat,
+      (s) =>
+        !hidden.has(s.key) && s.east >= tileWest - reachLon && s.west <= tileEast + reachLon && s.north >= tileSouth - reachLat && s.south <= tileNorth + reachLat,
     )
     // Nothing here: an empty image (never throw, never return a canvas: see imagery.ts).
     if (!inside.length) return createImageBitmap(new ImageData(1, 1))

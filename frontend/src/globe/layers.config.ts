@@ -223,6 +223,13 @@ export interface LegendItem {
   dot?: boolean
   /** One plain sentence: what this thing is. Shown in the legend. */
   hint?: string
+  /**
+   * Geologic map layers: the values of the layer's style attribute this entry stands for.
+   * With it, the entry can be hidden and shown by itself in the TOC.
+   */
+  keys?: string[]
+  /** Rover path: which part of the layer this entry is ('line' or 'marker'), for the same purpose. */
+  part?: 'line' | 'marker'
   dashed?: boolean
 }
 
@@ -330,8 +337,8 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'vector',
     note: 'Every drive of the rover since landing in 2021.',
     legendItems: [
-      { color: '#ffffff', label: 'Path the rover drove', line: true, hint: 'Real drives, from NASA mission data.' },
-      { color: '#ffffff', label: 'Where the rover was last', dot: true },
+      { color: '#ffffff', label: 'Path the rover drove', line: true, hint: 'Real drives, from NASA mission data.', part: 'line' },
+      { color: '#ffffff', label: 'Where the rover was last', dot: true, part: 'marker' },
     ],
     source: 'NASA/JPL-Caltech, Mars 2020 mission map',
     defaultOn: false,
@@ -360,8 +367,8 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'geology',
     note: 'Small craters and blocks of broken old rock.',
     legendItems: [
-      { color: BLACK, label: 'Crater, 200 to 500 m', dot: true, hint: 'A crater too small to draw as an area.' },
-      { color: '#ff0000', label: 'Megabreccia (broken old rock)', dot: true, hint: 'Big blocks of very old crust, broken by impacts.' },
+      { color: BLACK, label: 'Crater, 200 to 500 m', dot: true, hint: 'A crater too small to draw as an area.', keys: ['small crater'] },
+      { color: '#ff0000', label: 'Megabreccia (broken old rock)', dot: true, hint: 'Big blocks of very old crust, broken by impacts.', keys: ['megabreccia'] },
     ],
     source: USGS_MAP,
     geology: {
@@ -400,10 +407,11 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'geology',
     note: 'Old river channels, crater rims, ridges and the fronts of the delta.',
     legendItems: [
-      { color: '#005ce6', label: 'River channel', line: true, dashed: true, hint: 'Where water once flowed.' },
-      { color: '#00c5ff', label: 'Delta lobe front', line: true, dashed: true, hint: 'The outer edge of a tongue of the river delta.' },
-      { color: BLACK, label: 'Crater rim crest', line: true, hint: 'The top line of a crater wall.' },
-      { color: BLACK, label: 'Lineament, buried crater', line: true, dashed: true, hint: 'A straight feature in the ground, or the rim of a crater that is now covered.' },
+      { color: '#005ce6', label: 'River channel', line: true, dashed: true, hint: 'Where water once flowed.', keys: ['channel (fluvial)'] },
+      { color: '#00c5ff', label: 'Delta lobe front', line: true, dashed: true, hint: 'The outer edge of a tongue of the river delta.', keys: ['delta lobe front'] },
+      { color: BLACK, label: 'Crater rim crest', line: true, hint: 'The top line of a crater wall.', keys: ['crest of crater rim'] },
+      { color: BLACK, label: 'Ridge crest', line: true, hint: 'The top line of a ridge.', keys: ['ridge crest (type 1), certain'] },
+      { color: BLACK, label: 'Lineament, buried crater', line: true, dashed: true, hint: 'A straight feature in the ground, or the rim of a crater that is now covered.', keys: ['lineament', 'crest of buried crater'] },
     ],
     source: USGS_MAP,
     geology: {
@@ -433,8 +441,8 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'geology',
     note: 'The lines where one rock unit meets another.',
     legendItems: [
-      { color: BLACK, label: 'Certain', line: true, hint: 'The border between two rock units is clearly seen.' },
-      { color: BLACK, label: 'Approximate, inferred or hidden', line: true, dashed: true, hint: 'The border is not clearly seen: its place is a best estimate.' },
+      { color: BLACK, label: 'Certain', line: true, hint: 'The border between two rock units is clearly seen.', keys: ['boundary', 'certain', 'generic contact 1', 'generic contact 2'] },
+      { color: BLACK, label: 'Approximate, inferred or hidden', line: true, dashed: true, hint: 'The border is not clearly seen: its place is a best estimate.', keys: ['approximate', 'concealed', 'inferred'] },
     ],
     source: USGS_MAP,
     geology: {
@@ -465,8 +473,8 @@ export const PANEL_LAYERS: PanelLayer[] = [
     category: 'geology',
     note: 'Ridged ground and dark material lying on top of the rock.',
     legendItems: [
-      { color: 'rgba(0,0,0,0.35)', label: 'Ridged ground', hint: 'Ground covered with many small ridges.' },
-      { color: 'rgba(20,20,20,0.6)', label: 'Dark mantling material', hint: 'A thin dark cover lying on top of the rock.' },
+      { color: 'rgba(0,0,0,0.35)', label: 'Ridged ground', hint: 'Ground covered with many small ridges.', keys: ['ridged'] },
+      { color: 'rgba(20,20,20,0.6)', label: 'Dark mantling material', hint: 'A thin dark cover lying on top of the rock.', keys: ['dark-colored mantling material'] },
     ],
     source: USGS_MAP,
     geology: {
@@ -491,7 +499,7 @@ export const PANEL_LAYERS: PanelLayer[] = [
     title: 'Geologic units',
     category: 'geology',
     note: 'The 14 kinds of rock and ground, each in its own colour.',
-    legendItems: ROCK_UNITS.map(([, color, label, hint]) => ({ color, label, hint })),
+    legendItems: ROCK_UNITS.map(([unit, color, label, hint]) => ({ color, label, hint, keys: [unit] })),
     source: USGS_MAP,
     geology: ROCK_UNITS_SOURCE,
     defaultOn: false,

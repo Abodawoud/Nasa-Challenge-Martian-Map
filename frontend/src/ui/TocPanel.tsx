@@ -3,6 +3,9 @@
 // list short. The eye hides a layer on the map and shows it again: the layer stays in this
 // list, and while it is hidden it is not in the legend. Layers are switched on and off in
 // the Layers panel.
+//
+// Inside a layer, every legend entry that stands for its own kind of thing (one rock unit, the
+// river channels, the rover's marker) has its own eye: it hides that kind only.
 import { useState, useSyncExternalStore } from 'react'
 import { Box, Button, Flex, HStack, IconButton, Text, VStack } from '@chakra-ui/react'
 import { ChevronDown, Eye, EyeOff, Layers, ListTree } from 'lucide-react'
@@ -10,6 +13,7 @@ import { PANEL_GROUPS, PANEL_LAYERS } from '../globe/layers.config'
 import type { PanelLayer } from '../globe/layers.config'
 import { layerStore } from '../globe/layerState'
 import { LegendBody, LegendRow, MAP_MARKERS } from './MapLegend'
+import type { LegendItem } from '../globe/layers.config'
 import { ToolCard } from './Sidebar'
 
 /** Does this layer have something to explain when it is opened? */
@@ -147,7 +151,7 @@ export function TocPanel({ onClose, onOpenLayers }: { onClose: () => void; onOpe
                     </Flex>
                     {openable && (
                       <Box id={`toc-layer-${entry.id}`} hidden={!open} pl="9" pr="4" pb="3" opacity={row.hidden ? 0.55 : 1}>
-                        <LegendBody entry={entry} />
+                        <TocLegend entry={entry} hiddenItems={row.hiddenItems} />
                       </Box>
                     )}
                   </Box>
@@ -168,5 +172,68 @@ export function TocPanel({ onClose, onOpenLayers }: { onClose: () => void; onOpe
         </Button>
       </HStack>
     </ToolCard>
+  )
+}
+
+/** Can this legend entry be hidden by itself? Only when the map knows which things it stands for. */
+const canHide = (item: LegendItem) => Boolean(item.keys?.length || item.part)
+
+/**
+ * The legend of one layer inside the TOC. Like the legend card, plus an eye on every entry
+ * that can be hidden by itself.
+ */
+function TocLegend({ entry, hiddenItems }: { entry: PanelLayer; hiddenItems: string[] }) {
+  const items = entry.legendItems ?? []
+  const hideable = items.filter(canHide)
+  // A layer with one kind only, or with a colour bar: nothing to hide by itself.
+  if (hideable.length < 2) return <LegendBody entry={entry} />
+
+  return (
+    <Box>
+      <Text fontSize="2xs" color="gray.600" lineHeight="1.35" mb="1.5">
+        {entry.note}
+      </Text>
+      <Flex align="center" justify="space-between" mb="1">
+        <Text fontSize="2xs" color="gray.600" fontVariantNumeric="tabular-nums">
+          {hideable.length - hiddenItems.length} of {hideable.length} shown
+        </Text>
+        <HStack gap="1">
+          <Button size="2xs" variant="ghost" colorPalette="brand" disabled={hiddenItems.length === 0} onClick={() => layerStore.showAllItems(entry)}>
+            Show all
+          </Button>
+          <Button size="2xs" variant="ghost" colorPalette="brand" disabled={hiddenItems.length === hideable.length} onClick={() => hideable.forEach((item) => layerStore.setItemHidden(entry, item.label, true))}>
+            Hide all
+          </Button>
+        </HStack>
+      </Flex>
+      <VStack as="ul" align="stretch" gap="0.5" listStyleType="none">
+        {items.map((item) => {
+          const hidden = hiddenItems.includes(item.label)
+          return (
+            <Flex as="li" key={item.label} align="flex-start" gap="1">
+              {canHide(item) ? (
+                <IconButton
+                  aria-label={hidden ? `Show ${item.label} on the map` : `Hide ${item.label} on the map`}
+                  aria-pressed={!hidden}
+                  title={hidden ? 'Show on the map' : 'Hide on the map'}
+                  size="2xs"
+                  variant="ghost"
+                  flexShrink={0}
+                  color={hidden ? 'gray.400' : 'brand.700'}
+                  onClick={() => layerStore.setItemHidden(entry, item.label, !hidden)}
+                >
+                  {hidden ? <EyeOff size={13} aria-hidden /> : <Eye size={13} aria-hidden />}
+                </IconButton>
+              ) : (
+                <Box w="6" flexShrink={0} />
+              )}
+              <Box flex="1" minW="0" py="0.5" opacity={hidden ? 0.45 : 1}>
+                <LegendRow item={item} as="div" />
+              </Box>
+            </Flex>
+          )
+        })}
+      </VStack>
+    </Box>
   )
 }

@@ -3,10 +3,11 @@
 // in the Layers panel. Its content comes from PANEL_LAYERS (layers.config.ts), so a new
 // layer with a legend shows up here by itself.
 import { Box, Flex, HStack, IconButton, Text, VStack } from '@chakra-ui/react'
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Palette, X } from 'lucide-react'
 import { PANEL_LAYERS } from '../globe/layers.config'
 import type { LegendItem, PanelLayer } from '../globe/layers.config'
+import { layerStore } from '../globe/layerState'
 import { FoldButton } from './Sidebar'
 
 /** A small sample of how one thing looks on the map. */
@@ -27,9 +28,9 @@ function Sample({ item }: { item: LegendItem }) {
 }
 
 /** One entry of a legend: a sample, its name, and one sentence about it. */
-export function LegendRow({ item }: { item: LegendItem }) {
+export function LegendRow({ item, as = 'li' }: { item: LegendItem; as?: 'li' | 'div' }) {
   return (
-    <HStack as="li" gap="2" minW="0" align="flex-start">
+    <HStack as={as} gap="2" minW="0" align="flex-start">
       <Box mt="1px">
         <Sample item={item} />
       </Box>
@@ -51,7 +52,9 @@ export function LegendRow({ item }: { item: LegendItem }) {
 export const MAP_MARKERS: LegendItem[] = [{ color: '#e8231f', label: 'Perseverance landing site', dot: true, hint: 'Where the rover touched down in February 2021.' }]
 
 /** What one layer shows and how to read it: used by the legend card and by the TOC. */
-export function LegendBody({ entry }: { entry: PanelLayer }) {
+export function LegendBody({ entry, hiddenItems = [] }: { entry: PanelLayer; hiddenItems?: string[] }) {
+  // Entries hidden by themselves in the TOC are not on the map, so they are not explained here.
+  const items = entry.legendItems?.filter((item) => !hiddenItems.includes(item.label))
   return (
     <Box>
       <Text fontSize="2xs" color="gray.600" lineHeight="1.35" mb={entry.legendScale || entry.legendItems ? '2' : '0'}>
@@ -67,9 +70,9 @@ export function LegendBody({ entry }: { entry: PanelLayer }) {
           </HStack>
         </Box>
       )}
-      {entry.legendItems && (
+      {items && items.length > 0 && (
         <VStack as="ul" align="stretch" gap="1.5" listStyleType="none">
-          {entry.legendItems.map((item) => (
+          {items.map((item) => (
             <LegendRow key={item.label} item={item} />
           ))}
         </VStack>
@@ -85,6 +88,7 @@ export function LegendBody({ entry }: { entry: PanelLayer }) {
 
 export function MapLegend({ activeLayers, open, onClose }: { activeLayers: string[]; open: boolean; onClose: () => void }) {
   const blocks = PANEL_LAYERS.filter((entry) => activeLayers.includes(entry.id) && (entry.legendItems || entry.legendScale))
+  const rows = useSyncExternalStore(layerStore.subscribe, layerStore.get)
   /** Folded down to its heading. The legend sits at the bottom of the map, so it folds downwards. */
   const [folded, setFolded] = useState(false)
   if (!open) return null
@@ -137,32 +141,8 @@ export function MapLegend({ activeLayers, open, onClose }: { activeLayers: strin
             <Text as="h3" fontSize="2xs" fontWeight="700" letterSpacing="0.06em" textTransform="uppercase" color="brand.700">
               {entry.title}
             </Text>
-            {/* What this layer is, in one line, then how to read it. */}
-            <Text fontSize="2xs" color="gray.600" lineHeight="1.35" mb="2">
-              {entry.note}
-              {entry.legend ? ` ${entry.legend}` : ''}
-            </Text>
-            {entry.legendScale && (
-              <Box mb={entry.legendItems ? '2' : '0'}>
-                <Box aria-hidden h="10px" borderRadius="full" borderWidth="1px" borderColor="blackAlpha.300" style={{ backgroundImage: entry.legendScale.css }} />
-                <HStack justify="space-between" mt="1" fontSize="2xs" color="gray.800">
-                  <Text>{entry.legendScale.low}</Text>
-                  <Text>{entry.legendScale.high}</Text>
-                </HStack>
-              </Box>
-            )}
-            {entry.legendItems && (
-              <VStack as="ul" align="stretch" gap="1.5" listStyleType="none">
-                {entry.legendItems.map((item) => (
-                  <LegendRow key={item.label} item={item} />
-                ))}
-              </VStack>
-            )}
-            {entry.caution && (
-              <Text mt="1.5" fontSize="2xs" color="orange.800">
-                An estimate, not a measurement.
-              </Text>
-            )}
+            {/* What this layer is, then how to read it. Entries hidden in the TOC are left out. */}
+            <LegendBody entry={entry} hiddenItems={rows[entry.id].hiddenItems} />
           </Box>
         ))}
 
