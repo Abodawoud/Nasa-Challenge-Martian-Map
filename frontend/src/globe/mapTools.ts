@@ -25,13 +25,16 @@ export const toolInput = {
  * round badge that says what a click will do. The tip of the arrow is the exact spot.
  *   measure   a ruler line with two end marks
  *   identify  the letter i
+ *   route     a small flag
  * If the browser cannot show it, the plain crosshair is used.
  */
-export function toolCursor(kind: 'measure' | 'identify'): string {
+export function toolCursor(kind: 'measure' | 'identify' | 'route'): string {
   const badge =
     kind === 'measure'
       ? '<path d="M18.2 23h9.6M18.2 20.2v5.6M27.8 20.2v5.6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>'
-      : '<circle cx="23" cy="19.4" r="1.25" fill="#fff"/><path d="M23 22.4v4.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>'
+      : kind === 'route'
+        ? '<path d="M20.2 27.6v-9.4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><path d="M20.2 18.6h6.6l-1.9 2.3 1.9 2.3h-6.6z" fill="#fff"/>'
+        : '<circle cx="23" cy="19.4" r="1.25" fill="#fff"/><path d="M23 22.4v4.6" stroke="#fff" stroke-width="2" stroke-linecap="round"/>'
   const svg =
     '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">' +
     // The arrow: white with a navy edge, readable on bright and on dark ground.

@@ -12,6 +12,7 @@ import { PlacesPanel, SourcesPanel, ToolRail } from './ui/Sidebar'
 import { MeasurePanel } from './ui/MeasurePanel'
 import { IdentifyPanel } from './ui/IdentifyPanel'
 import { TocPanel } from './ui/TocPanel'
+import { RoutePanel } from './ui/RoutePanel'
 import type { Tool } from './ui/Sidebar'
 import { CompassStar } from './ui/CompassStar'
 import { visibleTilesLoaded } from './globe/preload'
@@ -169,6 +170,7 @@ export default function App() {
           <MarsViewer onReady={onReady} onCursor={setCursor} onTerrainStatus={setTerrain} />
           <LayersPanel viewer={viewer} onActiveChange={setActiveLayers} open={tool === 'layers'} onClose={closeTool} />
           {tool === 'toc' && <TocPanel onClose={closeTool} onOpenLayers={() => setTool('layers')} />}
+          <RoutePanel viewer={viewer} open={tool === 'route'} onClose={closeTool} />
           <MeasurePanel viewer={viewer} open={tool === 'measure'} onClose={closeTool} />
           <IdentifyPanel viewer={viewer} open={tool === 'identify'} onClose={closeTool} />
           {tool === 'places' && <PlacesPanel viewer={viewer} onClose={closeTool} />}

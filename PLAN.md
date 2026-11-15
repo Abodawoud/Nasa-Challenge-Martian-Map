@@ -261,7 +261,7 @@ Legend: ✅ chosen · ❌ rejected · ⚠️ needs a test
 | Route | Cost of each step | Meaning |
 |---|---|---|
 | **A: Shortest** | Real walking distance on the ground (includes up and down) | The shortest walk |
-| **B: Gentler slopes** | Walking distance × a penalty that grows with steepness | Longer, but avoids steep ground |
+| **B: Lower-slope** (first called "Gentler slopes") | Walking distance × a penalty that grows with steepness | Longer, but avoids steep ground |
 
 We **never** call Route B "safest". Slope is only one danger. Rocks, sand, dust and light are not fully modelled.
 
