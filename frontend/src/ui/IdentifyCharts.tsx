@@ -44,8 +44,10 @@ export function HeightScale({ valueM, minM, maxM, landingM }: { valueM: number; 
             <Text>Landing site</Text>
           </HStack>
         )}
-        <Text color="gray.500">Range: the whole Jezero height map</Text>
       </HStack>
+      <Text fontSize="2xs" color="gray.500" mt="0.5">
+        The bar goes from the lowest to the highest ground of the whole Jezero height map.
+      </Text>
     </Box>
   )
 }

@@ -83,7 +83,7 @@ function RailButton({ label, active, controls, onClick, badge, children }: { lab
 }
 
 /** The white card a tool opens beside the bar. */
-export function ToolCard({ id, title, icon, onClose, children }: { id: string; title: string; icon: ReactNode; onClose: () => void; children: ReactNode }) {
+export function ToolCard({ id, title, icon, onClose, children, width = '340px' }: { id: string; title: string; icon: ReactNode; onClose: () => void; children: ReactNode; width?: string }) {
   return (
     <Box
       id={id}
@@ -93,7 +93,7 @@ export function ToolCard({ id, title, icon, onClose, children }: { id: string; t
       top="3"
       left="3"
       zIndex="10"
-      w="340px"
+      w={width}
       maxW="calc(100% - 24px)"
       maxH="calc(100% - 24px)"
       overflowY="auto"

@@ -1,17 +1,32 @@
 // The Identify tool's panel: the picked place, what is known about it, and saved waypoints.
+//
+// Layout, top to bottom: the place, three numbers to read at a glance, then one card per
+// kind of fact with a small chart, the rover's photos (they open in a viewer with arrows and
+// thumbnails), and the waypoints.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type * as Cesium from 'cesium'
-import { Box, Button, Flex, HStack, IconButton, Input, Link, Spinner, Text, VStack } from '@chakra-ui/react'
-import { Bookmark, Camera, Mountain, MousePointerClick, Navigation, Shapes, Trash2 } from 'lucide-react'
-import { IdentifyTool, PHOTO_RANGE_M, groundAt, rockAt, roverAt, slopeWord, waypointStore } from '../globe/identify'
+import { Box, Button, Flex, HStack, IconButton, Input, SimpleGrid, Spinner, Text, VStack } from '@chakra-ui/react'
+import { Bookmark, Camera, Check, Copy, Mountain, MousePointerClick, Navigation, Shapes, Trash2, TrendingUp, Waves } from 'lucide-react'
+import Lightbox from 'yet-another-react-lightbox'
+import Captions from 'yet-another-react-lightbox/plugins/captions'
+import Counter from 'yet-another-react-lightbox/plugins/counter'
+import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails'
+import Zoom from 'yet-another-react-lightbox/plugins/zoom'
+import 'yet-another-react-lightbox/styles.css'
+import 'yet-another-react-lightbox/plugins/captions.css'
+import 'yet-another-react-lightbox/plugins/counter.css'
+import 'yet-another-react-lightbox/plugins/thumbnails.css'
+import { IdentifyTool, PHOTO_RANGE_M, groundAt, landingSiteHeightM, rockAt, roverAt, slopeWord, waypointStore } from '../globe/identify'
 import type { Fact, GroundFact, RockFact, RoverFact } from '../globe/identify'
 import { flyToPlace, formatDistance, formatPlace } from '../globe/mapTools'
 import type { LonLat } from '../globe/mapTools'
+import { GroundCut, HeightScale, SlopeGauge } from './IdentifyCharts'
 import { ToolCard } from './Sidebar'
 
 const LOADING = { state: 'loading' } as const
 const metres = new Intl.NumberFormat('en', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const whole = new Intl.NumberFormat('en', { maximumFractionDigits: 0 })
 
 interface Props {
   viewer: Cesium.Viewer | null
@@ -26,7 +41,11 @@ export function IdentifyPanel({ viewer, open, onClose }: Props) {
   const [ground, setGround] = useState<Fact<GroundFact>>(LOADING)
   const [rock, setRock] = useState<Fact<RockFact>>(LOADING)
   const [rover, setRover] = useState<Fact<RoverFact>>(LOADING)
+  const [landingM, setLandingM] = useState<number | undefined>()
   const [name, setName] = useState('')
+  const [copied, setCopied] = useState(false)
+  /** Which photo the viewer shows, or -1 when it is closed. */
+  const [photo, setPhoto] = useState(-1)
   const waypoints = useSyncExternalStore(waypointStore.subscribe, waypointStore.get)
 
   useEffect(() => {
@@ -55,9 +74,15 @@ export function IdentifyPanel({ viewer, open, onClose }: Props) {
     setRock(LOADING)
     setRover(LOADING)
     setName('')
+    setCopied(false)
+    setPhoto(-1)
     groundAt(place, abort.signal).then(keep(setGround), () => undefined)
     rockAt(place).then(keep(setRock), () => undefined)
     roverAt(place, abort.signal).then(keep(setRover), () => undefined)
+    // The landing site's height, to compare with (asked once, then remembered).
+    void landingSiteHeightM().then((height) => {
+      if (!abort.signal.aborted) setLandingM(height)
+    })
     return () => abort.abort()
   }, [place])
 
@@ -70,50 +95,125 @@ export function IdentifyPanel({ viewer, open, onClose }: Props) {
     setName('')
   }
 
+  const copy = () => {
+    if (!place) return
+    void navigator.clipboard?.writeText(`${place.lat.toFixed(5)}, ${place.lon.toFixed(5)}`).then(() => setCopied(true))
+  }
+
+  const photos = rover.state === 'ready' ? rover.value.photos : []
+  const sol = rover.state === 'ready' ? rover.value.sol : 0
+
   return (
-    <ToolCard id="tool-identify" title="Identify" icon={<MousePointerClick size={16} aria-hidden />} onClose={onClose}>
+    <ToolCard id="tool-identify" title="Identify" icon={<MousePointerClick size={16} aria-hidden />} onClose={onClose} width="392px">
       {!place ? (
-        <Text px="4" py="4" fontSize="sm" color="gray.700">
-          <b>Click</b> any place on the map to see what is known about it: its coordinates, height, slope, rock type and the rover&rsquo;s photos.
-        </Text>
+        <Box px="4" py="5">
+          <Text fontSize="sm" fontWeight="600" color="gray.900">
+            Click any place on the map
+          </Text>
+          <Text fontSize="xs" color="gray.600" mt="1">
+            You will see its coordinates, height, slope and rock type, and photos the rover took nearby. Height and photos exist inside Jezero Crater.
+          </Text>
+        </Box>
       ) : (
-        <Box aria-live="polite">
-          <Box px="4" py="3" bg="brand.50" borderBottomWidth="1px" borderColor="gray.200">
-            <Text fontSize="2xs" fontWeight="700" letterSpacing="0.06em" textTransform="uppercase" color="brand.700">
-              Picked place
-            </Text>
-            <Text fontSize="md" fontWeight="700" color="gray.900" fontVariantNumeric="tabular-nums">
-              {formatPlace(place)}
-            </Text>
-            <Text fontSize="2xs" color="gray.600">
-              Latitude, then longitude counted east. Mars 2000 sphere.
-            </Text>
-          </Box>
+        <Box aria-live="polite" bg="gray.50">
+          {/* The place */}
+          <Flex align="center" gap="2" px="4" py="3" bg="brand.700" color="white">
+            <Box flex="1" minW="0">
+              <Text fontSize="2xs" fontWeight="700" letterSpacing="0.08em" textTransform="uppercase" color="whiteAlpha.700">
+                Picked place
+              </Text>
+              <Text fontSize="md" fontWeight="700" fontVariantNumeric="tabular-nums">
+                {formatPlace(place)}
+              </Text>
+              <Text fontSize="2xs" color="whiteAlpha.700">
+                Latitude, then longitude counted to the east
+              </Text>
+            </Box>
+            <IconButton aria-label={copied ? 'Coordinates copied' : 'Copy the coordinates'} title={copied ? 'Copied' : 'Copy the coordinates'} size="xs" variant="ghost" color="white" _hover={{ bg: 'whiteAlpha.200' }} onClick={copy}>
+              {copied ? <Check size={15} aria-hidden /> : <Copy size={15} aria-hidden />}
+            </IconButton>
+          </Flex>
 
-          <Section icon={<Mountain size={15} aria-hidden />} title="Height and slope">
-            <FactView fact={ground}>
-              {(value) => (
-                <>
-                  <Row label="Height" value={`${metres.format(value.elevationM)} m`} note="Above the Mars reference level (the areoid, Mars's “sea level”). Jezero lies below it, so the number is negative." />
-                  {value.slopeDeg === null ? (
-                    <Row label="Slope" value="–" note="Not available at the very edge of the height map." />
-                  ) : (
-                    <Row label="Slope" value={`${metres.format(value.slopeDeg)}°`} note={`${slopeWord(value.slopeDeg)}. Measured over about ${value.resolutionM * 2} m of ground.`} />
-                  )}
-                  <Source>{value.source}</Source>
-                </>
-              )}
-            </FactView>
-          </Section>
+          {/* Three numbers to read at a glance */}
+          <SimpleGrid columns={3} gap="2" px="3" pt="3">
+            <Tile label="Height" loading={ground.state === 'loading'} value={ground.state === 'ready' ? `${whole.format(ground.value.elevationM)} m` : '–'} />
+            <Tile
+              label="Slope"
+              loading={ground.state === 'loading'}
+              value={ground.state === 'ready' && ground.value.slopeDeg !== null ? `${metres.format(ground.value.slopeDeg)}°` : '–'}
+              note={ground.state === 'ready' && ground.value.slopeDeg !== null ? slopeWord(ground.value.slopeDeg) : undefined}
+            />
+            <Tile label="Rock type" loading={rock.state === 'loading'} value={rock.state === 'ready' ? rock.value.label : '–'} swatch={rock.state === 'ready' ? rock.value.color : undefined} small />
+          </SimpleGrid>
 
-          <Section icon={<Shapes size={15} aria-hidden />} title="Rock type">
-            <FactView fact={rock}>
-              {(value) => (
-                <>
-                  <HStack gap="2" align="flex-start">
-                    <Box flexShrink={0} mt="1" boxSize="12px" borderRadius="2px" bg={value.color} borderWidth="1px" borderColor="blackAlpha.400" aria-hidden />
+          <VStack align="stretch" gap="2" p="3">
+            <Card icon={<Mountain size={15} aria-hidden />} title="Height" source={ground.state === 'ready' ? ground.value.source : undefined}>
+              <FactView fact={ground}>
+                {(value) => (
+                  <>
+                    <HStack align="baseline" gap="2">
+                      <Text fontSize="xl" fontWeight="700" color="gray.900" fontVariantNumeric="tabular-nums" whiteSpace="nowrap" flexShrink={0}>
+                        {metres.format(value.elevationM)} m
+                      </Text>
+                      {landingM !== undefined && (
+                        <Text fontSize="xs" color="gray.700">
+                          {Math.abs(value.elevationM - landingM) < 0.5 ? (
+                            'the same as the landing site'
+                          ) : (
+                            <>
+                              <b>{whole.format(Math.abs(value.elevationM - landingM))} m</b> {value.elevationM > landingM ? 'higher' : 'lower'} than the landing site
+                            </>
+                          )}
+                        </Text>
+                      )}
+                    </HStack>
+                    <HeightScale valueM={value.elevationM} minM={value.areaMinM} maxM={value.areaMaxM} landingM={landingM} />
+                    <Text fontSize="2xs" color="gray.600" mt="1.5">
+                      Counted from the Mars reference level (the areoid, Mars&rsquo;s &ldquo;sea level&rdquo;). All of Jezero lies below it, so the numbers are negative.
+                    </Text>
+                  </>
+                )}
+              </FactView>
+            </Card>
+
+            {ground.state === 'ready' && ground.value.profile.heightsM.length > 2 && (
+              <Card icon={<Waves size={15} aria-hidden />} title="Shape of the ground" source={ground.value.source}>
+                <GroundCut heightsM={ground.value.profile.heightsM} halfWidthM={ground.value.profile.halfWidthM} />
+              </Card>
+            )}
+
+            {ground.state === 'ready' && (
+              <Card icon={<TrendingUp size={15} aria-hidden />} title="Slope" source={ground.value.source}>
+                {ground.value.slopeDeg === null ? (
+                  <Text fontSize="xs" color="gray.600">
+                    Not available at the very edge of the height map.
+                  </Text>
+                ) : (
+                  <>
+                    <HStack align="baseline" gap="2">
+                      <Text fontSize="xl" fontWeight="700" color="gray.900" fontVariantNumeric="tabular-nums">
+                        {metres.format(ground.value.slopeDeg)}°
+                      </Text>
+                      <Text fontSize="xs" color="gray.700">
+                        {slopeWord(ground.value.slopeDeg)}
+                      </Text>
+                    </HStack>
+                    <SlopeGauge degrees={ground.value.slopeDeg} />
+                    <Text fontSize="2xs" color="gray.600" mt="1.5">
+                      Measured over about {ground.value.resolutionM * 2} m of ground. The bands only describe the angle. They are not a safety rating.
+                    </Text>
+                  </>
+                )}
+              </Card>
+            )}
+
+            <Card icon={<Shapes size={15} aria-hidden />} title="Rock type" source={rock.state === 'ready' ? 'USGS geologic map SIM 3464 (Sun and Stack, 2020)' : undefined}>
+              <FactView fact={rock}>
+                {(value) => (
+                  <HStack gap="2.5" align="flex-start">
+                    <Box flexShrink={0} mt="0.5" boxSize="22px" borderRadius="md" bg={value.color} borderWidth="1px" borderColor="blackAlpha.400" aria-hidden />
                     <Box>
-                      <Text fontSize="sm" fontWeight="600" color="gray.900">
+                      <Text fontSize="sm" fontWeight="700" color="gray.900">
                         {value.label}
                       </Text>
                       <Text fontSize="xs" color="gray.700">
@@ -121,48 +221,67 @@ export function IdentifyPanel({ viewer, open, onClose }: Props) {
                       </Text>
                     </Box>
                   </HStack>
-                  <Source>USGS geologic map SIM 3464 (Sun and Stack, 2020)</Source>
-                </>
-              )}
-            </FactView>
-          </Section>
+                )}
+              </FactView>
+            </Card>
 
-          <Section icon={<Camera size={15} aria-hidden />} title="Perseverance rover">
-            <FactView fact={rover}>
-              {(value) => (
-                <>
-                  <Text fontSize="xs" color="gray.800">
-                    {value.distanceM <= PHOTO_RANGE_M ? (
+            <Card icon={<Camera size={15} aria-hidden />} title="Real look: rover photos" source={rover.state === 'ready' ? 'NASA/JPL-Caltech, Mars 2020 raw images' : undefined}>
+              <FactView fact={rover}>
+                {(value) => (
+                  <>
+                    <Text fontSize="xs" color="gray.800">
+                      {value.distanceM <= PHOTO_RANGE_M ? (
+                        <>
+                          Perseverance drove <b>{formatDistance(value.distanceM)}</b> from here on <b>sol {value.sol}</b> (a sol is one Mars day).
+                        </>
+                      ) : (
+                        <>
+                          The rover did not come here, so there are no photos. Its nearest drive was <b>{formatDistance(value.distanceM)}</b> away (sol {value.sol}). Pick a place on the rover&rsquo;s path to see photos.
+                        </>
+                      )}
+                    </Text>
+                    {value.distanceM <= PHOTO_RANGE_M && value.photos.length === 0 && (
+                      <Text fontSize="xs" color="gray.600" mt="1">
+                        NASA&rsquo;s feed has no ground photos for that sol.
+                      </Text>
+                    )}
+                    {value.photos.length > 0 && (
                       <>
-                        The rover drove <b>{formatDistance(value.distanceM)}</b> from here on <b>sol {value.sol}</b> (a sol is one Mars day).
-                      </>
-                    ) : (
-                      <>
-                        The rover did not come here. Its nearest drive was <b>{formatDistance(value.distanceM)}</b> away (sol {value.sol}).
+                        <SimpleGrid as="ul" columns={3} gap="1.5" mt="2" listStyleType="none">
+                          {value.photos.map((item, index) => (
+                            <Box as="li" key={item.small}>
+                              <Box
+                                as="button"
+                                display="block"
+                                w="full"
+                                p="0"
+                                cursor="zoom-in"
+                                borderRadius="md"
+                                overflow="hidden"
+                                borderWidth="1px"
+                                borderColor="gray.300"
+                                aria-label={`Open photo ${index + 1} of ${value.photos.length}: ${item.camera}, sol ${value.sol}`}
+                                onClick={() => setPhoto(index)}
+                                _hover={{ borderColor: 'brand.500' }}
+                                _focusVisible={{ outline: '2px solid', outlineColor: 'brand.500', outlineOffset: '2px' }}
+                              >
+                                <img src={item.small} alt="" width={96} height={72} loading="lazy" style={{ display: 'block', width: '100%', height: 72, objectFit: 'cover', background: '#e5e7eb' }} />
+                              </Box>
+                            </Box>
+                          ))}
+                        </SimpleGrid>
+                        <Text fontSize="2xs" color="gray.600" mt="1.5">
+                          Taken by the rover on sol {value.sol}, near this place but not exactly on it. Click a photo to look through them.
+                        </Text>
                       </>
                     )}
-                  </Text>
-                  {value.photos.length > 0 && (
-                    <>
-                      <Flex gap="1.5" mt="2" wrap="wrap">
-                        {value.photos.map((photo) => (
-                          <Link key={photo.small} href={photo.large} target="_blank" rel="noreferrer" borderRadius="md" overflow="hidden" borderWidth="1px" borderColor="gray.200" title={photo.caption}>
-                            <img src={photo.small} alt={photo.caption || `Photo by the rover on sol ${value.sol}`} width={138} height={104} loading="lazy" style={{ display: 'block', width: 138, height: 104, objectFit: 'cover' }} />
-                          </Link>
-                        ))}
-                      </Flex>
-                      <Text fontSize="2xs" color="gray.600" mt="1">
-                        Photos the rover&rsquo;s navigation camera took on sol {value.sol}, not exactly at the picked place. Click a photo to open it.
-                      </Text>
-                    </>
-                  )}
-                  <Source>NASA/JPL-Caltech, Mars 2020 mission</Source>
-                </>
-              )}
-            </FactView>
-          </Section>
+                  </>
+                )}
+              </FactView>
+            </Card>
+          </VStack>
 
-          <Box as="form" onSubmit={save} px="4" py="3" borderTopWidth="1px" borderColor="gray.200" bg="gray.50">
+          <Box as="form" onSubmit={save} px="4" py="3" borderTopWidth="1px" borderColor="gray.200" bg="white">
             <label htmlFor="waypoint-name" style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#1f2937', marginBottom: 4 }}>
               Save this place as a waypoint
             </label>
@@ -208,20 +327,68 @@ export function IdentifyPanel({ viewer, open, onClose }: Props) {
           </VStack>
         )}
       </Box>
+
+      {/* The photo viewer: arrows and keys to move between photos, thumbnails, zoom. */}
+      <Lightbox
+        open={photo >= 0}
+        index={Math.max(0, photo)}
+        close={() => setPhoto(-1)}
+        slides={photos.map((item) => ({ src: item.large, title: `${item.camera} · sol ${sol}`, description: item.caption }))}
+        plugins={[Captions, Counter, Thumbnails, Zoom]}
+        captions={{ descriptionTextAlign: 'center', descriptionMaxLines: 3 }}
+        thumbnails={{ width: 96, height: 64, border: 1, borderRadius: 6, padding: 0, gap: 8 }}
+        zoom={{ maxZoomPixelRatio: 3 }}
+        carousel={{ finite: photos.length < 2 }}
+        styles={{ container: { backgroundColor: 'rgba(5, 11, 28, 0.94)' } }}
+      />
     </ToolCard>
   )
 }
 
-function Section({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+/** One number to read at a glance. */
+function Tile({ label, value, note, swatch, small, loading }: { label: string; value: string; note?: string; swatch?: string; small?: boolean; loading: boolean }) {
   return (
-    <Box px="4" py="3" borderBottomWidth="1px" borderColor="gray.100">
+    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" px="2.5" py="2" minW="0">
+      <Text fontSize="2xs" fontWeight="600" color="gray.600" textTransform="uppercase" letterSpacing="0.05em">
+        {label}
+      </Text>
+      {loading ? (
+        <Spinner size="xs" mt="1.5" color="gray.500" />
+      ) : (
+        <>
+          <HStack gap="1.5" mt="0.5" minW="0">
+            {swatch && <Box flexShrink={0} boxSize="10px" borderRadius="2px" bg={swatch} borderWidth="1px" borderColor="blackAlpha.400" aria-hidden />}
+            <Text fontSize={small ? 'xs' : 'sm'} fontWeight="700" color="gray.900" lineHeight="1.25" fontVariantNumeric="tabular-nums" lineClamp={2} whiteSpace={small ? undefined : 'nowrap'}>
+              {value}
+            </Text>
+          </HStack>
+          {note && (
+            <Text fontSize="2xs" color="gray.600" lineHeight="1.2" mt="0.5">
+              {note}
+            </Text>
+          )}
+        </>
+      )}
+    </Box>
+  )
+}
+
+/** One kind of fact: a title, its content, and where the data comes from. */
+function Card({ icon, title, source, children }: { icon: ReactNode; title: string; source?: string; children: ReactNode }) {
+  return (
+    <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="lg" px="3" py="2.5">
       <HStack gap="1.5" color="brand.700" mb="1.5">
         {icon}
-        <Text as="h3" fontSize="xs" fontWeight="700">
+        <Text as="h3" fontSize="xs" fontWeight="700" letterSpacing="0.02em">
           {title}
         </Text>
       </HStack>
       {children}
+      {source && (
+        <Text mt="2" pt="1.5" borderTopWidth="1px" borderColor="gray.100" fontSize="2xs" color="gray.500">
+          Source: {source}
+        </Text>
+      )}
     </Box>
   )
 }
@@ -240,32 +407,6 @@ function FactView<T>({ fact, children }: { fact: Fact<T>; children: (value: T) =
   return (
     <Text fontSize="xs" color={fact.state === 'error' ? 'red.700' : 'gray.600'}>
       {fact.why}
-    </Text>
-  )
-}
-
-function Row({ label, value, note }: { label: string; value: string; note: string }) {
-  return (
-    <Box mb="1.5">
-      <HStack justify="space-between" align="baseline">
-        <Text fontSize="xs" color="gray.700">
-          {label}
-        </Text>
-        <Text fontSize="md" fontWeight="700" color="gray.900" fontVariantNumeric="tabular-nums">
-          {value}
-        </Text>
-      </HStack>
-      <Text fontSize="2xs" color="gray.600">
-        {note}
-      </Text>
-    </Box>
-  )
-}
-
-function Source({ children }: { children: ReactNode }) {
-  return (
-    <Text mt="1.5" fontSize="2xs" color="gray.500">
-      Source: {children}
     </Text>
   )
 }

@@ -122,7 +122,7 @@ export interface RoverPhoto {
   small: string
   large: string
   caption: string
-  /** "Mastcam-Z (colour)" or "Navigation camera". */
+  /** "Mastcam-Z mast camera" or "Navigation camera". */
   camera: string
 }
 
@@ -181,10 +181,10 @@ export async function roverAt(place: LonLat, signal: AbortSignal): Promise<Fact<
     const { sol, distanceM } = nearestDrive(path, place.lon, place.lat)
     let photos: RoverPhoto[] = []
     if (distanceM <= PHOTO_RANGE_M) {
-      // Colour photos first (Mastcam-Z, the rover's main colour camera), then the grey
+      // Mastcam-Z first (the rover's main mast camera: raw frames, some grey, some colour), then the grey
       // navigation camera, which looks at the ground around the rover.
       const [colour, navigation] = await Promise.all([
-        cameraPhotos(sol, 'MCZ_LEFT', 'Mastcam-Z (colour)', 6, signal),
+        cameraPhotos(sol, 'MCZ_LEFT', 'Mastcam-Z mast camera', 6, signal),
         cameraPhotos(sol, 'NAVCAM_LEFT', 'Navigation camera', 4, signal),
       ])
       photos = [...colour, ...navigation]
