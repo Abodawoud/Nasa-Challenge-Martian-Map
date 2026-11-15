@@ -1,8 +1,8 @@
-// The Layers panel: a button on the map that opens a white card. Every row is one entry of
+// The Layers panel: a white card opened from the tool bar (Sidebar.tsx). Every row is one entry of
 // PANEL_LAYERS (layers.config.ts): a switch, and a transparency slider for overlays.
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type * as Cesium from 'cesium'
-import { Badge, Box, Button, Flex, HStack, IconButton, Slider, Spinner, Switch, Text } from '@chakra-ui/react'
+import { Badge, Box, Flex, HStack, IconButton, Slider, Spinner, Switch, Text } from '@chakra-ui/react'
 import { ChevronDown, Layers, TriangleAlert, X } from 'lucide-react'
 import { PANEL_GROUPS, PANEL_LAYERS } from '../globe/layers.config'
 import type { LayerCategory, PanelLayer } from '../globe/layers.config'
@@ -37,15 +37,15 @@ interface Props {
   viewer: Cesium.Viewer | null
   /** Told which layers are on (panel ids), for the map legend. */
   onActiveChange?: (ids: string[]) => void
+  /** The panel stays in the page while closed, so the switches keep their state. */
+  open: boolean
+  onClose: () => void
 }
 
-export function LayersPanel({ viewer, onActiveChange }: Props) {
-  const [open, setOpen] = useState(false)
+export function LayersPanel({ viewer, onActiveChange, open, onClose }: Props) {
   const [rows, setRows] = useState(initialState)
   /** Groups that are folded: only their heading shows. */
   const [closed, setClosed] = useState<Record<string, boolean>>(() => Object.fromEntries(PANEL_GROUPS.map((group) => [group.id, !!group.startClosed])))
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  const count = PANEL_LAYERS.filter((entry) => rows[entry.id].on).length
 
   // The legend lists a layer once it is really on the map (not while it is still loading).
   const active = PANEL_LAYERS.filter((entry) => rows[entry.id].on && !rows[entry.id].loading)
@@ -74,44 +74,19 @@ export function LayersPanel({ viewer, onActiveChange }: Props) {
     if (viewer) setLayerOpacity(viewer, entry, opacity)
   }
 
-  // Escape closes the panel and gives the focus back to its button.
+  // Escape closes the panel.
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
-      setOpen(false)
-      requestAnimationFrame(() => buttonRef.current?.focus())
+      onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+  }, [open, onClose])
 
   return (
-    <Box position="absolute" top="4" left="4" zIndex="10" maxW="calc(100% - 32px)">
-      {!open && (
-        <Button
-          ref={buttonRef}
-          onClick={() => setOpen(true)}
-          aria-expanded={false}
-          size="sm"
-          bg="whiteAlpha.900"
-          color="brand.700"
-          backdropFilter="blur(10px)"
-          borderWidth="1px"
-          borderColor="whiteAlpha.600"
-          borderRadius="xl"
-          shadow="lg"
-          fontWeight="600"
-          _hover={{ bg: 'white' }}
-        >
-          <Layers size={16} aria-hidden />
-          Layers
-          <Badge size="sm" colorPalette="brand" variant="solid" borderRadius="full" fontVariantNumeric="tabular-nums">
-            {count}
-          </Badge>
-        </Button>
-      )}
-
+    <Box position="absolute" top="3" left="3" zIndex="10" maxW="calc(100% - 24px)" hidden={!open}>
       {open && (
         <Box
           id="layers-panel"
@@ -119,7 +94,7 @@ export function LayersPanel({ viewer, onActiveChange }: Props) {
           aria-label="Map layers"
           w="340px"
           maxW="full"
-          maxH="calc(100vh - 170px)"
+          maxH="calc(100vh - 150px)"
           overflowY="auto"
           overscrollBehavior="contain"
           bg="white"
@@ -135,7 +110,7 @@ export function LayersPanel({ viewer, onActiveChange }: Props) {
                 Map layers
               </Text>
             </HStack>
-            <IconButton aria-label="Close the layers panel" size="xs" variant="ghost" color="gray.600" onClick={() => setOpen(false)}>
+            <IconButton aria-label="Close the layers panel" size="xs" variant="ghost" color="gray.600" onClick={onClose}>
               <X size={16} aria-hidden />
             </IconButton>
           </Flex>

@@ -8,6 +8,8 @@ import type { CursorInfo, ViewMode } from './globe/MarsViewer'
 import { MapControls } from './ui/MapControls'
 import { LayersPanel } from './ui/LayersPanel'
 import { MapLegend } from './ui/MapLegend'
+import { PlacesPanel, SourcesPanel, ToolRail } from './ui/Sidebar'
+import type { Tool } from './ui/Sidebar'
 import { CompassStar } from './ui/CompassStar'
 import { visibleTilesLoaded } from './globe/preload'
 
@@ -30,6 +32,10 @@ export default function App() {
   const [viewer, setViewer] = useState<Cesium.Viewer | null>(null)
   const [tilesLoading, setTilesLoading] = useState(true)
   const [activeLayers, setActiveLayers] = useState<string[]>([])
+  // The tool bar: which left panel is open, and whether the legend card shows.
+  const [tool, setTool] = useState<Tool | null>(null)
+  const [legendOpen, setLegendOpen] = useState(true)
+  const closeTool = useCallback(() => setTool(null), [])
 
   useEffect(() => {
     fetch('/api/health')
@@ -69,8 +75,8 @@ export default function App() {
   }
 
   return (
-    // Three rows: top bar, map, status bar. The map has its own area in the middle, so the
-    // bars never cover any part of it. Both bars are the navy of the logo, like the start page.
+    // Three rows: top bar, map (with the tool bar at its left), status bar. The map has its
+    // own area in the middle, so the bars never cover any part of it. Both bars are the navy of the logo, like the start page.
     <Flex direction="column" h="100vh" w="full" overflow="hidden" bg="brand.900">
       {/* Top bar */}
       <Flex
@@ -152,13 +158,19 @@ export default function App() {
         <Box aria-hidden position="absolute" insetX="0" bottom="0" h="2px" bgGradient="to-r" gradientFrom="nasaRed" gradientVia="nasaRed" gradientTo="transparent" />
       </Flex>
 
-      {/* The map. "mars-space" + data-sky (set by MarsViewer) draw the space or Mars sky behind it. */}
-      <Box className="mars-space" position="relative" flex="1" minH="0" overflow="hidden">
-        <MarsViewer onReady={onReady} onCursor={setCursor} onTerrainStatus={setTerrain} />
-        <LayersPanel viewer={viewer} onActiveChange={setActiveLayers} />
-        <MapLegend activeLayers={activeLayers} />
-        <MapControls viewer={viewer} />
-      </Box>
+      {/* Middle row: the tool bar, then the map. */}
+      <Flex flex="1" minH="0">
+        <ToolRail tool={tool} onTool={setTool} legendOpen={legendOpen} onLegend={setLegendOpen} layerCount={activeLayers.length} />
+        {/* The map. "mars-space" + data-sky (set by MarsViewer) draw the space or Mars sky behind it. */}
+        <Box className="mars-space" position="relative" flex="1" minW="0" minH="0" overflow="hidden">
+          <MarsViewer onReady={onReady} onCursor={setCursor} onTerrainStatus={setTerrain} />
+          <LayersPanel viewer={viewer} onActiveChange={setActiveLayers} open={tool === 'layers'} onClose={closeTool} />
+          {tool === 'places' && <PlacesPanel viewer={viewer} onClose={closeTool} />}
+          {tool === 'sources' && <SourcesPanel onClose={closeTool} />}
+          <MapLegend activeLayers={activeLayers} open={legendOpen} onClose={() => setLegendOpen(false)} />
+          <MapControls viewer={viewer} />
+        </Box>
+      </Flex>
 
       {/* Bottom status bar */}
       <Flex

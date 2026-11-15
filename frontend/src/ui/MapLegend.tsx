@@ -1,10 +1,9 @@
-// The map legend: a small card on the map that explains everything drawn on it right now.
+// The map legend (opened from the tool bar, Sidebar.tsx): a small card on the map that explains everything drawn on it right now.
 // It lists the markers that are always there, then one block per layer that is switched on
 // in the Layers panel. Its content comes from PANEL_LAYERS (layers.config.ts), so a new
 // layer with a legend shows up here by itself.
-import { useState } from 'react'
-import { Box, Button, Flex, HStack, IconButton, Text, VStack } from '@chakra-ui/react'
-import { ChevronDown, ListTree } from 'lucide-react'
+import { Box, Flex, HStack, IconButton, Text, VStack } from '@chakra-ui/react'
+import { ListTree, X } from 'lucide-react'
 import { PANEL_LAYERS } from '../globe/layers.config'
 import type { LegendItem } from '../globe/layers.config'
 
@@ -48,37 +47,14 @@ function Row({ item }: { item: LegendItem }) {
 /** Markers that are on the map whatever layers are on. */
 const ALWAYS: LegendItem[] = [{ color: '#e8231f', label: 'Perseverance landing site', dot: true, hint: 'Where the rover touched down in February 2021.' }]
 
-export function MapLegend({ activeLayers }: { activeLayers: string[] }) {
-  const [open, setOpen] = useState(true)
+export function MapLegend({ activeLayers, open, onClose }: { activeLayers: string[]; open: boolean; onClose: () => void }) {
   const blocks = PANEL_LAYERS.filter((entry) => activeLayers.includes(entry.id) && (entry.legendItems || entry.legendScale))
-
-  if (!open) {
-    return (
-      <Box position="absolute" bottom="4" right="16" zIndex="10">
-        <Button
-          onClick={() => setOpen(true)}
-          aria-expanded={false}
-          size="sm"
-          bg="whiteAlpha.900"
-          color="brand.700"
-          backdropFilter="blur(10px)"
-          borderWidth="1px"
-          borderColor="whiteAlpha.600"
-          borderRadius="xl"
-          shadow="lg"
-          fontWeight="600"
-          _hover={{ bg: 'white' }}
-        >
-          <ListTree size={16} aria-hidden />
-          Legend
-        </Button>
-      </Box>
-    )
-  }
+  if (!open) return null
 
   return (
     <Box
       as="section"
+      id="tool-legend"
       aria-label="Map legend"
       position="absolute"
       bottom="4"
@@ -103,8 +79,8 @@ export function MapLegend({ activeLayers }: { activeLayers: string[] }) {
             Legend
           </Text>
         </HStack>
-        <IconButton aria-label="Hide the legend" aria-expanded size="xs" variant="ghost" color="gray.600" onClick={() => setOpen(false)}>
-          <ChevronDown size={16} aria-hidden />
+        <IconButton aria-label="Close the legend" size="xs" variant="ghost" color="gray.600" onClick={onClose}>
+          <X size={16} aria-hidden />
         </IconButton>
       </Flex>
 
