@@ -6,6 +6,14 @@ import type { LineState } from './lineDraw'
 
 export type Measurement = LineState
 
+/** What is measured: the length of a line, or the area inside a shape. */
+export type MeasureKind = 'distance' | 'area'
+
+export const MEASURE_KINDS: Array<{ id: MeasureKind; title: string; note: string }> = [
+  { id: 'distance', title: 'Distance', note: 'The length of a line through your points.' },
+  { id: 'area', title: 'Area', note: 'The area inside a shape, and the distance around it.' },
+]
+
 export class MeasureTool extends LineDrawer {
   constructor(viewer: Cesium.Viewer, onChange: (measurement: Measurement) => void) {
     super(viewer, {
@@ -18,5 +26,9 @@ export class MeasureTool extends LineDrawer {
         afterFinish: 'Click to start a new measurement',
       },
     })
+  }
+
+  setKind(kind: MeasureKind) {
+    this.setClosed(kind === 'area')
   }
 }

@@ -282,6 +282,10 @@ export class IdentifyTool {
     this.active = active
     toolInput.cursor = active ? toolCursor('identify') : ''
     this.viewer.scene.canvas.style.cursor = toolInput.cursor
+    // Switched off: the picked mark and the waypoints are hidden, not deleted.
+    if (this.pickedEntity) this.pickedEntity.show = active
+    for (const entity of this.waypointEntities) entity.show = active
+    this.viewer.scene.requestRender()
   }
 
   /** Remove the mark of the picked place. */
@@ -345,6 +349,7 @@ export class IdentifyTool {
       this.pickedEntity = viewer.entities.add({
         position: drawPosition(viewer, this.picked, 3),
         point: { pixelSize: 14, color: Cesium.Color.fromCssColorString('#ffd23f'), outlineColor: NAVY, outlineWidth: 3, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+        show: this.active,
       })
     }
     viewer.scene.requestRender()
@@ -357,6 +362,7 @@ export class IdentifyTool {
     this.waypointEntities = waypointStore.get().map((waypoint) =>
       viewer.entities.add({
         position: drawPosition(viewer, waypoint, 3),
+        show: this.active,
         point: { pixelSize: 11, color: Cesium.Color.WHITE, outlineColor: NAVY, outlineWidth: 3, disableDepthTestDistance: Number.POSITIVE_INFINITY },
         label: {
           text: waypoint.name,

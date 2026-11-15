@@ -12,6 +12,11 @@
 //   drag the ground           move the map as always
 //   click after finishing     start a new line (the old one is replaced)
 //
+// With `closed` the line is a shape: its last point is joined to its first, and the area
+// inside is shown. A click on the first point finishes it too.
+// When the tool is switched off its drawing is hidden, not deleted: it is back when the
+// tool is switched on again.
+//
 // How it stays smooth: the shapes on the map are made once and read their positions from a
 // small cache. Moving the mouse or dragging a point only changes the cache and asks for one
 // new frame. Nothing is removed and added again while the mouse moves.
@@ -22,7 +27,7 @@
 // reads as "behind the hill" and is still not lost.
 // The numbers are distances over the Mars sphere, see surfaceDistanceM().
 import * as Cesium from 'cesium'
-import { drawPosition, formatDistance, onGroundChanged, pickPlace, pointsBetween, surfaceDistanceM, toolCursor, toolInput } from './mapTools'
+import { drawPosition, formatArea, formatDistance, onGroundChanged, pickPlace, pointsBetween, surfaceAreaM2, surfaceDistanceM, toolCursor, toolInput } from './mapTools'
 import type { LonLat } from './mapTools'
 
 const NAVY = Cesium.Color.fromCssColorString('#0c1a3d')
@@ -53,6 +58,10 @@ export interface LineState {
   totalM: number
   /** True after the line was finished: the dashed line no longer follows the mouse. */
   finished: boolean
+  /** True when the line is a closed shape. Then segments holds the closing side too, and totalM is the distance around. */
+  closed: boolean
+  /** The area inside a closed shape with at least three points, in square metres. Else 0. */
+  areaM2: number
 }
 
 export interface LineDrawOptions {
@@ -62,6 +71,8 @@ export interface LineDrawOptions {
   cursor: 'measure' | 'identify'
   /** Called after every change: a point added, moved or removed, the line finished or cleared. */
   onChange: (state: LineState) => void
+  /** Join the last point to the first and show the area inside. Can be changed later with setClosed(). */
+  closed?: boolean
   /** Words for the note at the cursor. */
   words: { first: string; next: string; afterFinish: string }
 }
@@ -89,10 +100,16 @@ export class LineDrawer {
   private pointPositions: Cesium.Cartesian3[] = []
   private partPositions: Cesium.Cartesian3[][] = []
   private previewPositions: Cesium.Cartesian3[] = []
+  /** Closed shapes: the side from the last point back to the first. */
+  private closingPositions: Cesium.Cartesian3[] = []
+  private closed: boolean
+  /** False while the tool is switched off: its drawing is hidden. */
+  private visible = false
 
   private readonly lineEntity: Cesium.Entity
   private readonly previewEntity: Cesium.Entity
   private readonly totalEntity: Cesium.Entity
+  private readonly closingLabel: Cesium.Entity
   private pointEntities: Cesium.Entity[] = []
   private labelEntities: Cesium.Entity[] = []
   private readonly tip: HTMLDivElement
@@ -105,6 +122,7 @@ export class LineDrawer {
     this.viewer = viewer
     this.options = options
     this.placeCursor = toolCursor(options.cursor)
+    this.closed = !!options.closed
     const LINE = Cesium.Color.fromCssColorString(options.color)
     const canvas = viewer.scene.canvas
 
@@ -116,7 +134,7 @@ export class LineDrawer {
     this.lineEntity = viewer.entities.add({
       polyline: {
         positions: new Cesium.CallbackProperty(() => this.linePositions(), false),
-        show: new Cesium.CallbackProperty(() => this.points.length > 1, false),
+        show: new Cesium.CallbackProperty(() => this.visible && this.points.length > 1, false),
         width: 5,
         arcType: Cesium.ArcType.NONE, // the positions already follow the ground
         material: solid,
@@ -136,9 +154,15 @@ export class LineDrawer {
       },
     })
     this.totalEntity = viewer.entities.add({
-      position: new Cesium.CallbackPositionProperty(() => this.pointPositions[this.pointPositions.length - 1], false),
+      // A line: the total at its last point. A shape: the area in its middle.
+      position: new Cesium.CallbackPositionProperty(() => (this.closed ? this.middle() : this.pointPositions[this.pointPositions.length - 1]), false),
       show: false,
-      label: this.labelStyle(() => `Total ${formatDistance(this.state.totalM)}`, true),
+      label: this.labelStyle(() => (this.closed ? `Area ${formatArea(this.state.areaM2)}` : `Total ${formatDistance(this.state.totalM)}`), true),
+    })
+    this.closingLabel = viewer.entities.add({
+      position: new Cesium.CallbackPositionProperty(() => this.closingPositions[Math.floor(this.closingPositions.length / 2)], false),
+      show: false,
+      label: this.labelStyle(() => (this.points.length > 2 ? formatDistance(surfaceDistanceM(this.points[this.points.length - 1], this.points[0])) : '')),
     })
 
     // The small note that follows the cursor. Plain HTML: sharp text, and it moves without
@@ -188,22 +212,47 @@ export class LineDrawer {
     )
   }
 
-  /** Only while active do clicks on the map add points. The drawing stays either way. */
+  /**
+   * Switch the tool on or off. Off: clicks no longer add points, and the drawing is hidden
+   * (not deleted). On again: the drawing is back as it was.
+   */
   setActive(active: boolean) {
     this.active = active
-    if (active) this.drawing = true
-    else {
+    this.visible = active
+    if (!active) {
       this.endDrag()
       this.hover = -1
       this.hideTip()
     }
     this.applyCursor()
+    this.applyVisibility()
+  }
+
+  /** A line (false) or a closed shape with an area (true). The points are kept. */
+  setClosed(closed: boolean) {
+    if (closed === this.closed) return
+    this.closed = closed
+    this.grow = null
+    this.structureChanged()
+  }
+
+  /** Draw the numbers on the map again (after the units setting changed). */
+  refreshLabels() {
     this.viewer.scene.requestRender()
   }
 
   get state(): LineState {
+    const shape = this.closed && this.points.length > 2
     const segments = this.points.slice(1).map((point, i) => surfaceDistanceM(this.points[i], point))
-    return { points: [...this.points], segments, totalM: segments.reduce((sum, d) => sum + d, 0), finished: !this.drawing && this.points.length > 0 }
+    if (shape) segments.push(surfaceDistanceM(this.points[this.points.length - 1], this.points[0]))
+    return {
+      points: [...this.points],
+      segments,
+      totalM: segments.reduce((sum, d) => sum + d, 0),
+      finished: !this.drawing && this.points.length > 0,
+      closed: this.closed,
+      areaM2: shape ? surfaceAreaM2(this.points) : 0,
+    }
   }
 
   /** Finish the line: the dashed line stops. The points can still be moved and deleted. */
@@ -212,6 +261,7 @@ export class LineDrawer {
     this.drawing = false
     this.lastAdd.time = 0
     this.hideTip()
+    this.applyVisibility()
     this.options.onChange(this.state)
     this.viewer.scene.requestRender()
   }
@@ -247,7 +297,7 @@ export class LineDrawer {
       if (!this.viewer.isDestroyed()) this.viewer.scene.canvas.style.cursor = ''
     }
     if (this.viewer.isDestroyed()) return
-    for (const entity of [this.lineEntity, this.previewEntity, this.totalEntity, ...this.pointEntities, ...this.labelEntities]) this.viewer.entities.remove(entity)
+    for (const entity of [this.lineEntity, this.previewEntity, this.totalEntity, this.closingLabel, ...this.pointEntities, ...this.labelEntities]) this.viewer.entities.remove(entity)
   }
 
   // ------------------------------------------------------------------ mouse
@@ -334,14 +384,20 @@ export class LineDrawer {
     this.updatePreview()
 
     if (this.press) this.hideTip()
-    else if (hover >= 0) this.showTip(cursor, this.drawing && hover === this.points.length - 1 && this.points.length > 1 ? 'Click to finish · Drag to move' : 'Drag to move · Right click to delete')
+    else if (hover >= 0) this.showTip(cursor, this.finishesAt(hover) ? 'Click to finish · Drag to move' : 'Drag to move · Right click to delete')
     else if (!this.cursorPlace) this.hideTip()
     else if (this.points.length === 0) this.showTip(cursor, this.options.words.first)
     else if (!this.drawing) this.showTip(cursor, this.options.words.afterFinish)
     else {
       const part = surfaceDistanceM(this.points[this.points.length - 1], this.cursorPlace)
-      const total = this.state.totalM + part
-      this.showTip(cursor, this.points.length > 1 ? `${formatDistance(part)}  ·  total ${formatDistance(total)}` : formatDistance(part), this.options.words.next)
+      if (this.closed) {
+        // The area the shape would have with the cursor as its next corner.
+        const area = this.points.length > 1 ? `  ·  area ${formatArea(surfaceAreaM2([...this.points, this.cursorPlace]))}` : ''
+        this.showTip(cursor, `${formatDistance(part)}${area}`, this.options.words.next)
+      } else {
+        const lineTotal = this.points.slice(1).reduce((sum, point, i) => sum + surfaceDistanceM(this.points[i], point), 0) + part
+        this.showTip(cursor, this.points.length > 1 ? `${formatDistance(part)}  ·  total ${formatDistance(lineTotal)}` : formatDistance(part), this.options.words.next)
+      }
     }
     this.viewer.scene.requestRender()
   }
@@ -358,7 +414,7 @@ export class LineDrawer {
       event.stopPropagation()
       // A click on a point (no move). On the last point it finishes the line: this is also
       // what the second click of a double click does, because it lands on the new point.
-      if (!wasMoved && this.drawing && pressedPoint === this.points.length - 1) this.finish()
+      if (!wasMoved && this.finishesAt(pressedPoint)) this.finish()
       this.cursor = this.position(event)
       this.afterMove()
       return
@@ -391,6 +447,12 @@ export class LineDrawer {
     }
     this.cursor = position
     this.afterMove()
+  }
+
+  /** A click on this point finishes the drawing: the last point, or the first one of a shape. */
+  private finishesAt(point: number) {
+    if (!this.drawing || this.points.length < 2) return false
+    return point === this.points.length - 1 || (this.closed && point === 0 && this.points.length > 2)
   }
 
   private onCancel = () => {
@@ -474,6 +536,7 @@ export class LineDrawer {
     if (this.viewer.isDestroyed()) return
     this.pointPositions = this.points.map((point) => drawPosition(this.viewer, point, LIFT_M))
     this.partPositions = this.points.slice(1).map((point, i) => this.partFrom(this.points[i], point))
+    this.recomputeClosing()
     this.updatePreview()
     this.viewer.scene.requestRender()
   }
@@ -483,12 +546,41 @@ export class LineDrawer {
     this.pointPositions[index] = drawPosition(this.viewer, this.points[index], LIFT_M)
     if (index > 0) this.partPositions[index - 1] = this.partFrom(this.points[index - 1], this.points[index])
     if (index < this.points.length - 1) this.partPositions[index] = this.partFrom(this.points[index], this.points[index + 1])
+    if (index === 0 || index === this.points.length - 1) this.recomputeClosing()
+  }
+
+  private recomputeClosing() {
+    const n = this.points.length
+    this.closingPositions = this.closed && n > 2 ? this.partFrom(this.points[n - 1], this.points[0]) : []
+  }
+
+  /** The middle of the shape, on the ground: where the area label stands. */
+  private middle(): Cesium.Cartesian3 | undefined {
+    if (this.points.length === 0) return undefined
+    const lon = this.points.reduce((sum, p) => sum + p.lon, 0) / this.points.length
+    const lat = this.points.reduce((sum, p) => sum + p.lat, 0) / this.points.length
+    return drawPosition(this.viewer, { lon, lat }, LIFT_M)
+  }
+
+  /** Show or hide everything this tool has drawn. */
+  private applyVisibility() {
+    if (this.viewer.isDestroyed()) return
+    const parts = Math.max(0, this.points.length - 1)
+    for (const entity of [...this.pointEntities, ...this.labelEntities]) entity.show = this.visible
+    // A line: the total when there is more than one part. A shape: the area from three points.
+    this.totalEntity.show = this.visible && (this.closed ? this.points.length > 2 : parts > 1)
+    this.closingLabel.show = this.visible && this.closed && this.points.length > 2 && !this.drawing
+    this.viewer.scene.requestRender()
   }
 
   private updatePreview() {
     const last = this.points[this.points.length - 1]
     // The dashed line follows the mouse, so it is rebuilt on every move: fewer pieces.
     this.previewPositions = last && this.cursorPlace ? this.partFrom(last, this.cursorPlace, 96) : []
+    // A shape: the dashed line also goes back to the first point, to show the closed outline.
+    if (this.closed && this.cursorPlace && this.points.length > 1 && this.previewPositions.length) {
+      this.previewPositions = this.previewPositions.concat(this.partFrom(this.cursorPlace, this.points[0], 96).slice(1))
+    }
   }
 
   private previewShown() {
@@ -510,6 +602,8 @@ export class LineDrawer {
       }
       for (let k = i === 0 ? 0 : 1; k < shown.length; k++) line.push(shown[k])
     })
+    // A shape: the side back to the first point. While drawing, the dashed line shows it.
+    if (!this.drawing || !this.active) for (let k = 1; k < this.closingPositions.length; k++) line.push(this.closingPositions[k])
     return line
   }
 
@@ -571,8 +665,7 @@ export class LineDrawer {
         }),
       )
     }
-    // The total stands at the last point when there is more than one part.
-    this.totalEntity.show = parts > 1
+    this.applyVisibility()
     this.recomputeAll()
     this.options.onChange(this.state)
   }

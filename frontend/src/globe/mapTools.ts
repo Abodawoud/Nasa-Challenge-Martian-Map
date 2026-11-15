@@ -157,12 +157,23 @@ export function flyToPlace(viewer: Cesium.Viewer, place: LonLat, acrossM: number
 
 const number = (digits: number) => new Intl.NumberFormat('en', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 
-/** "86 m", "1.24 km", "1,530 km". */
-export function formatDistance(metres: number): string {
-  if (metres < 1000) return `${number(metres < 100 ? 1 : 0).format(metres)} m`
-  const km = metres / 1000
-  return `${number(km < 100 ? 2 : 0).format(km)} km`
+/**
+ * The area inside a closed shape on the Mars sphere, in square metres. The corners are joined
+ * in the order given. Good for shapes up to a few hundred kilometres across.
+ */
+export function surfaceAreaM2(corners: LonLat[]): number {
+  if (corners.length < 3) return 0
+  const toRad = Math.PI / 180
+  let sum = 0
+  corners.forEach((a, i) => {
+    const b = corners[(i + 1) % corners.length]
+    sum += (b.lon - a.lon) * toRad * (2 + Math.sin(a.lat * toRad) + Math.sin(b.lat * toRad))
+  })
+  return Math.abs((sum * MARS_RADIUS_M * MARS_RADIUS_M) / 2)
 }
+
+// Distances and areas as text live in units.ts (they follow the units setting).
+export { formatArea, formatDistance } from './units'
 
 /** "18.4446° N, 77.4509° E". */
 export function formatPlace(place: LonLat): string {
