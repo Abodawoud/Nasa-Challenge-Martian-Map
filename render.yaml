@@ -1,0 +1,14 @@
+# Render (render.com): the backend as a free web service, built from backend/Dockerfile.
+# On Render choose New, then Blueprint, and pick this repository. DEPLOY.md has the steps.
+services:
+  - type: web
+    name: martian-map-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      # A free service keeps no disk: the height map is downloaded again at each start.
+      - key: DEM_CACHE_DIR
+        value: /tmp/dem
