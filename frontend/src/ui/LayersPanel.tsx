@@ -40,8 +40,9 @@ export function LayersPanel({ viewer, onActiveChange, open, onClose }: Props) {
   /** Groups that are folded: only their heading shows. */
   const [closed, setClosed] = useState<Record<string, boolean>>(() => Object.fromEntries(PANEL_GROUPS.map((group) => [group.id, !!group.startClosed])))
 
-  // The legend lists a layer once it is really on the map (not while it is still loading).
-  const active = PANEL_LAYERS.filter((entry) => rows[entry.id].on && !rows[entry.id].loading)
+  // The legend lists a layer once it is really drawn on the map: switched on, loaded, and
+  // not hidden with the eye in the TOC.
+  const active = PANEL_LAYERS.filter((entry) => rows[entry.id].on && !rows[entry.id].loading && !rows[entry.id].hidden)
     .map((entry) => entry.id)
     .join('|')
   useEffect(() => {

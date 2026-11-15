@@ -1,9 +1,11 @@
 // The TOC (table of contents of the map): the layers that are switched on, in their groups.
 // Each layer can be opened to see what its colours and lines mean, or closed to keep the
-// list short. The eye switches a layer off. Layers are switched on in the Layers panel.
+// list short. The eye hides a layer on the map and shows it again: the layer stays in this
+// list, and while it is hidden it is not in the legend. Layers are switched on and off in
+// the Layers panel.
 import { useState, useSyncExternalStore } from 'react'
 import { Box, Button, Flex, HStack, IconButton, Text, VStack } from '@chakra-ui/react'
-import { ChevronDown, Eye, Layers, ListTree } from 'lucide-react'
+import { ChevronDown, Eye, EyeOff, Layers, ListTree } from 'lucide-react'
 import { PANEL_GROUPS, PANEL_LAYERS } from '../globe/layers.config'
 import type { PanelLayer } from '../globe/layers.config'
 import { layerStore } from '../globe/layerState'
@@ -23,6 +25,7 @@ export function TocPanel({ onClose, onOpenLayers }: { onClose: () => void; onOpe
   const active = PANEL_LAYERS.filter((entry) => rows[entry.id].on)
   const groups = PANEL_GROUPS.map((group) => ({ group, entries: active.filter((entry) => entry.group === group.id) })).filter((item) => item.entries.length > 0)
   const withLegend = active.filter(hasLegend)
+  const hiddenCount = active.filter((entry) => rows[entry.id].hidden).length
   const allShut = withLegend.length > 0 && withLegend.every((entry) => shut[entry.id])
 
   const setAll = (value: boolean) => setShut(Object.fromEntries(withLegend.map((entry) => [entry.id, value])))
@@ -31,7 +34,7 @@ export function TocPanel({ onClose, onOpenLayers }: { onClose: () => void; onOpe
     <ToolCard id="tool-toc" title="TOC · what is on the map" icon={<ListTree size={16} aria-hidden />} onClose={onClose}>
       <Flex align="center" gap="2" px="4" py="2.5" borderBottomWidth="1px" borderColor="gray.100">
         <Text flex="1" fontSize="xs" color="gray.700">
-          {active.length} {active.length === 1 ? 'layer is' : 'layers are'} on. Open one to see what it shows.
+          {active.length} {active.length === 1 ? 'layer' : 'layers'} on the map{hiddenCount > 0 ? `, ${hiddenCount} hidden` : ''}. The eye shows or hides a layer.
         </Text>
         {withLegend.length > 0 && (
           <Button size="2xs" variant="outline" colorPalette="brand" onClick={() => setAll(!allShut)}>
@@ -115,21 +118,35 @@ export function TocPanel({ onClose, onOpenLayers }: { onClose: () => void; onOpe
                         <Box flexShrink={0} color={openable ? 'gray.600' : 'transparent'} transform={open ? undefined : 'rotate(-90deg)'} transition="transform 0.15s ease">
                           <ChevronDown size={14} aria-hidden />
                         </Box>
-                        <Text fontSize="sm" fontWeight="600" color="gray.900" truncate>
+                        <Text fontSize="sm" fontWeight="600" color={row.hidden ? 'gray.500' : 'gray.900'} truncate>
                           {entry.title}
                         </Text>
+                        {row.hidden && (
+                          <Text flexShrink={0} fontSize="2xs" fontWeight="600" px="1.5" py="0.5" borderRadius="full" bg="gray.200" color="gray.700">
+                            Hidden
+                          </Text>
+                        )}
                         {row.loading && (
                           <Text fontSize="2xs" color="gray.500">
                             loading…
                           </Text>
                         )}
                       </Flex>
-                      <IconButton aria-label={`Switch off ${entry.title}`} title="Switch this layer off" size="xs" variant="ghost" color="brand.700" onClick={() => layerStore.toggle(entry, false)}>
-                        <Eye size={15} aria-hidden />
+                      <IconButton
+                        aria-label={row.hidden ? `Show ${entry.title} on the map` : `Hide ${entry.title} on the map`}
+                        aria-pressed={!row.hidden}
+                        title={row.hidden ? 'Show on the map' : 'Hide on the map'}
+                        size="xs"
+                        variant="ghost"
+                        color={row.hidden ? 'gray.500' : 'brand.700'}
+                        disabled={row.loading}
+                        onClick={() => layerStore.setHidden(entry, !row.hidden)}
+                      >
+                        {row.hidden ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}
                       </IconButton>
                     </Flex>
                     {openable && (
-                      <Box id={`toc-layer-${entry.id}`} hidden={!open} pl="9" pr="4" pb="3">
+                      <Box id={`toc-layer-${entry.id}`} hidden={!open} pl="9" pr="4" pb="3" opacity={row.hidden ? 0.55 : 1}>
                         <LegendBody entry={entry} />
                       </Box>
                     )}
@@ -143,7 +160,7 @@ export function TocPanel({ onClose, onOpenLayers }: { onClose: () => void; onOpe
 
       <HStack px="4" py="3" gap="2" justify="space-between">
         <Text fontSize="xs" color="gray.600">
-          {active.length === 0 ? 'No layers are on.' : 'Switch more layers on in Layers.'}
+          {active.length === 0 ? 'No layers are on.' : 'Add or remove layers in Layers.'}
         </Text>
         <Button size="xs" variant="outline" colorPalette="brand" flexShrink={0} onClick={onOpenLayers}>
           <Layers size={14} aria-hidden />
