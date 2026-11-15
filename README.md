@@ -130,24 +130,32 @@ Everything is loaded from public services at the moment you look at it. No data 
 
 ```mermaid
 flowchart LR
-    U["You, in the browser"]
-    subgraph DOCKER["docker compose"]
-        FE["frontend<br/>React + TypeScript + Vite<br/>CesiumJS"]
-        BE["backend<br/>Python FastAPI<br/>heights, slopes, routes"]
+    subgraph BROWSER["Your browser"]
+        APP["The app<br/>React + TypeScript + CesiumJS"]
+        SAVED["Browser cache<br/>tiles and data already seen"]
+    end
+    subgraph DOCKER["docker compose, on your machine or a server"]
+        FE["fe<br/>sends the app's files"]
+        BE["be: Python FastAPI<br/>heights, slopes, routes"]
+        VOL["cache volume<br/>the height map"]
     end
     TREK["NASA Mars Trek<br/>photos, 3D ground, heat"]
-    ESRI["CTX global mosaic<br/>(Esri OnMars)"]
+    ESRI["CTX global mosaic<br/>Esri OnMars"]
     M20["NASA Mars 2020<br/>rover path, photos, weather"]
     USGSF["USGS<br/>geologic map"]
     USGSD["USGS<br/>height map of Jezero"]
-    U --> FE
-    TREK -->|live tiles| FE
-    ESRI -->|live tiles| FE
-    M20 -->|live| FE
-    USGSF -->|live| FE
-    FE <-->|/api| BE
-    USGSD -->|downloaded once,<br/>kept in a cache volume| BE
+    FE -->|the app, once| APP
+    APP <-->|/api| BE
+    TREK -->|live tiles| APP
+    ESRI -->|live tiles| APP
+    M20 -->|live data| APP
+    USGSF -->|live data| APP
+    APP <-->|keeps a copy| SAVED
+    USGSD -->|downloaded once| VOL
+    VOL --> BE
 ```
+
+**How to read it.** The app runs inside your browser. Docker only sends its files and runs the calculator (the backend). Map pictures and data come straight from NASA and USGS to the browser. The browser keeps a copy of what it has seen: map tiles are reused at once, and the small data files (rover path, weather, geologic map) are used from the copy when a NASA or USGS server does not answer. The backend downloads the USGS height map once and keeps it in a Docker volume. Nothing is stored in the repository.
 
 ### The stack
 
@@ -272,6 +280,7 @@ The picture is the same. What changed:
 - **Walking time is an estimate.** The space suit factor and the slope rule are assumptions, listed in the Route panel.
 - **Photos limit the detail near the ground**: 25 cm only near the landing site, about 6 m elsewhere. Faint lines can show where two photo strips meet in NASA's own mosaics.
 - **Far from Jezero the 3D ground is coarse** (one height about every 330 m), so the photo can show shadows where the ground model is smooth.
+- **The app depends on outside servers** (NASA Mars Trek, NASA Mars 2020, USGS, Esri). Map tiles and the small data files are kept in the browser after the first visit, so a server that is down for a moment does not break those layers. A first visit still needs every server, and rover photos are not kept.
 - **Trek's terrain service is not a documented public API.** If it changes, the 3D ground falls back to a smooth sphere.
 - **Not built from the plan:** the intro fly-in, the mineral (CRISM) layers, contour lines and slope colours, swipe compare. Not tested: phone-size screens.
 

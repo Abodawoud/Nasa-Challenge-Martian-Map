@@ -216,7 +216,9 @@ requests with the Resource Timing API):
 - `scene.fog`: enabled, `renderable = false`, `screenSpaceErrorFactor = 4` (coarser far tiles, not drawn).
 - `maximumScreenSpaceError` 1.3 when still, 2 while the camera moves (`camera.moveStart` / `moveEnd`).
 - Tile cache: `public/tile-cache-sw.js` (service worker, cache-first for Trek, the terrain bucket
-  and Esri tiles). If tiles look stale after changing a layer, bump `CACHE` in that file.
+  and Esri tiles). The same worker keeps a safety copy of the live data files (rover path, weather
+  and photo lists, USGS geologic map): network first, the copy from the last visit after 8 s or on
+  failure (`mars-data-v1`). If tiles look stale after changing a layer, bump `CACHE` in that file.
 - Look-around preload on `camera.moveEnd` (3 directions x 200 nearest tiles, below 100 km).
 - Lowest camera height depends on photo detail: 25 m inside the HiRISE bounds, 250 m elsewhere
   (`minHeightAboveGround`). Blurry ground far from the landing site is the data limit, not a bug.
