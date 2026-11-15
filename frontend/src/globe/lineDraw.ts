@@ -27,7 +27,7 @@
 // reads as "behind the hill" and is still not lost.
 // The numbers are distances over the Mars sphere, see surfaceDistanceM().
 import * as Cesium from 'cesium'
-import { drawPosition, formatArea, formatDistance, onGroundChanged, pickPlace, pointsBetween, surfaceAreaM2, surfaceDistanceM, toolCursor, toolInput } from './mapTools'
+import { drawPosition, formatArea, liftForView, formatDistance, onGroundChanged, pickPlace, pointsBetween, surfaceAreaM2, surfaceDistanceM, toolCursor, toolInput } from './mapTools'
 import type { LonLat } from './mapTools'
 
 const NAVY = Cesium.Color.fromCssColorString('#0c1a3d')
@@ -47,7 +47,10 @@ const MIN_PIECES = 12
 const MAX_PIECES = 320
 /** How long a new part takes to draw itself in. */
 const GROW_MS = 260
-/** The line floats this much above the ground, so it does not flicker in and out of it. */
+/**
+ * The line floats at most this much above the ground, so it does not flicker in and out of
+ * it. Near the ground it floats less (see liftForView), so no gap shows under it.
+ */
 const LIFT_M = 4
 
 /** The line as it is now. */
@@ -529,12 +532,13 @@ export class LineDrawer {
   /** The positions of one part: on the ground, one about every STEP_M metres. */
   private partFrom(a: LonLat, b: LonLat, maxPieces = MAX_PIECES) {
     const pieces = Math.min(maxPieces, Math.max(MIN_PIECES, Math.ceil(surfaceDistanceM(a, b) / STEP_M)))
-    return pointsBetween(a, b, pieces).map((place) => drawPosition(this.viewer, place, LIFT_M))
+    const lift = liftForView(this.viewer, LIFT_M)
+    return pointsBetween(a, b, pieces).map((place) => drawPosition(this.viewer, place, lift))
   }
 
   private recomputeAll() {
     if (this.viewer.isDestroyed()) return
-    this.pointPositions = this.points.map((point) => drawPosition(this.viewer, point, LIFT_M))
+    this.pointPositions = this.points.map((point) => drawPosition(this.viewer, point, liftForView(this.viewer, LIFT_M)))
     this.partPositions = this.points.slice(1).map((point, i) => this.partFrom(this.points[i], point))
     this.recomputeClosing()
     this.updatePreview()
@@ -543,7 +547,7 @@ export class LineDrawer {
 
   /** A point moved: only it and the two parts that touch it change. */
   private recomputeAround(index: number) {
-    this.pointPositions[index] = drawPosition(this.viewer, this.points[index], LIFT_M)
+    this.pointPositions[index] = drawPosition(this.viewer, this.points[index], liftForView(this.viewer, LIFT_M))
     if (index > 0) this.partPositions[index - 1] = this.partFrom(this.points[index - 1], this.points[index])
     if (index < this.points.length - 1) this.partPositions[index] = this.partFrom(this.points[index], this.points[index + 1])
     if (index === 0 || index === this.points.length - 1) this.recomputeClosing()
@@ -559,7 +563,7 @@ export class LineDrawer {
     if (this.points.length === 0) return undefined
     const lon = this.points.reduce((sum, p) => sum + p.lon, 0) / this.points.length
     const lat = this.points.reduce((sum, p) => sum + p.lat, 0) / this.points.length
-    return drawPosition(this.viewer, { lon, lat }, LIFT_M)
+    return drawPosition(this.viewer, { lon, lat }, liftForView(this.viewer, LIFT_M))
   }
 
   /** Show or hide everything this tool has drawn. */

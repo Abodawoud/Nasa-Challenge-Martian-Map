@@ -70,6 +70,21 @@ export function drawPosition(viewer: Cesium.Viewer, place: LonLat, lift = 2): Ce
 }
 
 /**
+ * How far above the ground a drawn line should float, for the camera as it is now.
+ *
+ * Why it is not one fixed number (seen 2026-11-15): a lift of 4 m is invisible from 1 km up,
+ * but from 30 m above a hill it shows as a clear gap between the line and the ground. So the
+ * lift is 1% of the camera's height above the ground under it, between 0.3 m and `max`.
+ */
+export function liftForView(viewer: Cesium.Viewer, max: number): number {
+  if (viewer.scene.mode === Cesium.SceneMode.SCENE2D) return max
+  const camera = viewer.camera.positionCartographic
+  const ground = viewer.scene.globe.getHeight(camera) ?? 0
+  const above = Math.abs(camera.height - ground)
+  return Math.min(max, Math.max(0.3, above * 0.01))
+}
+
+/**
  * Call `redraw` after the ground on screen has changed, so shapes can be put on it again.
  *
  * Why this is needed (measured 2026-11-15): the map draws coarse ground from far away and
