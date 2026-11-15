@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import type * as Cesium from 'cesium'
 import { Box, Button, Flex, HStack, IconButton, Input, SimpleGrid, Spinner, Text, VStack } from '@chakra-ui/react'
-import { Bookmark, Camera, Check, Copy, MapPin, Mountain, Navigation, Shapes, Trash2, TrendingUp, Waves } from 'lucide-react'
+import { Bookmark, Camera, Check, Copy, MapPin, Mountain, Navigation, RotateCcw, Shapes, Trash2, TrendingUp, Waves } from 'lucide-react'
 import Lightbox from 'yet-another-react-lightbox'
 import Captions from 'yet-another-react-lightbox/plugins/captions'
 import Counter from 'yet-another-react-lightbox/plugins/counter'
@@ -68,9 +68,20 @@ export function IdentifyPanel({ viewer, open, onClose }: Props) {
     }
   }, [viewer])
 
+  /** Forget the picked place: the panel is as it was before the first click. Saved places are kept. */
+  const reset = () => {
+    tool.current?.clearPick()
+    setPlace(null)
+    setName('')
+    setCopied(false)
+    setPhoto(-1)
+  }
+
   // Clicks on the map pick a place only while the panel is open.
+  // Closing the tool resets it: the next time it opens, it starts fresh.
   useEffect(() => {
     tool.current?.setActive(open)
+    if (!open) reset()
   }, [open, viewer])
 
   // A new place: ask every source at the same time. A newer click cancels the older answers.
@@ -151,6 +162,10 @@ export function IdentifyPanel({ viewer, open, onClose }: Props) {
             <Button size="xs" variant="outline" color="white" borderColor="whiteAlpha.500" _hover={{ bg: 'whiteAlpha.200' }} onClick={copy} aria-live="polite">
               {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
               {copied ? 'Copied' : 'Copy'}
+            </Button>
+            <Button size="xs" variant="outline" color="white" borderColor="whiteAlpha.500" _hover={{ bg: 'whiteAlpha.200' }} onClick={reset} title="Forget this place and start again">
+              <RotateCcw size={14} aria-hidden />
+              Reset
             </Button>
           </Flex>
 
