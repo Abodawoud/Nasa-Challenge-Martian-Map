@@ -71,7 +71,7 @@ From then on, every push to `main` updates the website by itself.
 ## What was tested, and what was not
 
 - **Tested on the developer's computer:** the content of `deploy/space-build/` with the newest Gradio (6.32). It starts, downloads the height map, and answers `/api/health`, `/api/point`, `/api/routes` and `/api/reach`. It used about 385 MB of memory.
-- **Not tested:** the two services themselves. The first real run is yours.
+- **Tested live on 2026-11-15:** the Hugging Face Space (free ZeroGPU hardware) answers `/api/health`, `/api/dem/info`, `/api/point`, `/api/routes` and `/api/reach`. The Vercel site passes `/api` on to it.
 
 ## Things to know
 

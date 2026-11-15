@@ -1,10 +1,10 @@
 """Martian Map backend as a free Hugging Face Space (Gradio SDK).
 
-A free Space must be a Gradio app. So this file starts our normal FastAPI backend
-(the folder 'mapapi' beside this file is a copy of backend/app) and adds a small
-Gradio page on the front address. The API answers under /api as always.
+A free Space must be a Gradio app. So this file starts a small Gradio page and adds the
+routes of our normal FastAPI backend to the same server (the folder 'mapapi' beside this
+file is a copy of backend/app). The API answers under /api as always.
 
-Hugging Face starts a Gradio Space with 'python app.py' and expects port 7860.
+Hugging Face starts a Gradio Space with 'python app.py'.
 """
 
 import os
@@ -16,10 +16,12 @@ os.environ.setdefault("DEM_CACHE_DIR", "/tmp/dem")
 # Longer routes use the cell-steepness search instead. The answer says which one was used.
 os.environ.setdefault("DIRECTION_AWARE_MAX_CELLS", "400000")
 
-import gradio as gr  # noqa: E402
-import uvicorn  # noqa: E402
+import threading  # noqa: E402
 
-from mapapi.main import app as api  # noqa: E402
+import gradio as gr  # noqa: E402
+
+from mapapi import dem  # noqa: E402
+from mapapi import main as backend  # noqa: E402
 
 try:
     # On "ZeroGPU" hardware the Space wants to see one function marked for the GPU.
@@ -56,9 +58,19 @@ It is a planning prototype. It is not a navigation system for a real mission.
 with gr.Blocks(title="Martian Map API") as page:
     gr.Markdown(ABOUT)
 
-# The API routes were added first, so /api/... is answered by the backend.
-# Everything else goes to the Gradio page.
-app = gr.mount_gradio_app(api, page, path="/")
-
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    # Start the page the normal Gradio way. The Space expects this: a server we start
+    # ourselves on port 7860 fails there with "address already in use".
+    # ssr_mode=False: one Python server answers everything, no extra Node server in front.
+    page.launch(server_name="0.0.0.0", ssr_mode=False, prevent_thread_lock=True)
+
+    # Put the backend's /api routes in front of Gradio's own routes, on the same server.
+    api_routes = [r for r in backend.app.router.routes if getattr(r, "path", "").startswith("/api")]
+    page.app.router.routes[0:0] = api_routes
+
+    # The backend's own start-up step does not run here, so do the same two things by hand:
+    # download the height map, then prepare the ground facts.
+    dem.store.start_loading()
+    threading.Thread(target=backend._warm_up, name="ground-facts", daemon=True).start()
+
+    page.block_thread()
