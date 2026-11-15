@@ -3,11 +3,12 @@
 // Each icon is one tool ("plugin"). A click opens its panel beside the bar, a second click
 // closes it. Layers, Places and Sources share the left side, so one of them is open at a
 // time. The Legend is its own card at the bottom right, so it can stay open next to them.
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type * as CesiumTypes from 'cesium'
 import * as Cesium from 'cesium'
 import { Box, Flex, IconButton, Link, Text, VStack } from '@chakra-ui/react'
-import { BookOpen, ExternalLink, Layers, ListTree, MapPinned, MousePointerClick, Ruler, X } from 'lucide-react'
+import { BookOpen, ExternalLink, Layers, ListTree, ChevronUp, MapPin, MapPinned, Ruler, X } from 'lucide-react'
 import { MARS_ELLIPSOID, PERSEVERANCE_LANDING } from '../globe/mars'
 import { flyToJezero } from '../globe/MarsViewer'
 
@@ -27,7 +28,7 @@ export function ToolRail({ tool, onTool, legendOpen, onLegend, layerCount }: Rai
   const tools: Array<{ id: Tool; label: string; icon: ReactNode; badge?: number }> = [
     { id: 'layers', label: 'Layers', icon: <Layers size={19} aria-hidden />, badge: layerCount },
     { id: 'measure', label: 'Measure', icon: <Ruler size={19} aria-hidden /> },
-    { id: 'identify', label: 'Identify', icon: <MousePointerClick size={19} aria-hidden /> },
+    { id: 'identify', label: 'Place info', icon: <MapPin size={19} aria-hidden /> },
     { id: 'places', label: 'Places', icon: <MapPinned size={19} aria-hidden /> },
     { id: 'sources', label: 'Sources', icon: <BookOpen size={19} aria-hidden /> },
   ]
@@ -82,8 +83,13 @@ function RailButton({ label, active, controls, onClick, badge, children }: { lab
   )
 }
 
-/** The white card a tool opens beside the bar. */
+/**
+ * The white card a tool opens beside the bar. The arrow in its heading folds it up to the
+ * heading only, so the map is free, and unfolds it again. Folded, the tool keeps working
+ * (clicks on the map still measure or pick a place) and keeps everything it holds.
+ */
 export function ToolCard({ id, title, icon, onClose, children, width = '340px' }: { id: string; title: string; icon: ReactNode; onClose: () => void; children: ReactNode; width?: string }) {
+  const [folded, setFolded] = useState(false)
   return (
     <Box
       id={id}
@@ -104,18 +110,24 @@ export function ToolCard({ id, title, icon, onClose, children, width = '340px' }
       borderRadius="xl"
       shadow="xl"
     >
-      <Flex align="center" justify="space-between" px="4" py="2.5" borderBottomWidth="1px" borderColor="gray.200" position="sticky" top="0" bg="white" zIndex="2">
+      <Flex align="center" justify="space-between" pl="4" pr="2" py="2" borderBottomWidth={folded ? 0 : '1px'} borderColor="gray.200" position="sticky" top="0" bg="white" zIndex="2">
         <Flex align="center" gap="2" color="brand.700">
           {icon}
           <Text as="h2" fontWeight="700" fontSize="sm">
             {title}
           </Text>
         </Flex>
-        <IconButton aria-label={`Close ${title}`} size="xs" variant="ghost" color="gray.600" onClick={onClose}>
-          <X size={16} aria-hidden />
-        </IconButton>
+        <Flex align="center" gap="0.5">
+          <FoldButton title={title} folded={folded} onToggle={() => setFolded((now) => !now)} bodyId={`${id}-body`} />
+          <IconButton aria-label={`Close ${title}`} title="Close" size="xs" variant="ghost" color="gray.600" onClick={onClose}>
+            <X size={16} aria-hidden />
+          </IconButton>
+        </Flex>
       </Flex>
-      {children}
+      {/* Hidden, not removed: what is inside keeps its state while folded. */}
+      <Box id={`${id}-body`} hidden={folded}>
+        {children}
+      </Box>
     </Box>
   )
 }
@@ -211,5 +223,19 @@ export function SourcesPanel({ onClose }: { onClose: () => void }) {
         ))}
       </VStack>
     </ToolCard>
+  )
+}
+
+/**
+ * The fold arrow of a panel. A panel at the top folds upwards, so its arrow points up while
+ * open. The legend sits at the bottom and folds downwards: pass `down`.
+ */
+export function FoldButton({ title, folded, onToggle, bodyId, down = false }: { title: string; folded: boolean; onToggle: () => void; bodyId: string; down?: boolean }) {
+  // Open: the arrow points the way the panel will fold. Folded: it points the way it will open.
+  const flipped = down ? !folded : folded
+  return (
+    <IconButton aria-label={folded ? `Unfold ${title}` : `Fold ${title}`} title={folded ? 'Unfold' : 'Fold'} aria-expanded={!folded} aria-controls={bodyId} size="xs" variant="ghost" color="gray.600" onClick={onToggle}>
+      <ChevronUp size={16} aria-hidden style={{ transform: flipped ? 'rotate(180deg)' : undefined, transition: 'transform 150ms ease' }} />
+    </IconButton>
   )
 }

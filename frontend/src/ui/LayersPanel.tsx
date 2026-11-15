@@ -7,6 +7,7 @@ import { ChevronDown, Layers, TriangleAlert, X } from 'lucide-react'
 import { PANEL_GROUPS, PANEL_LAYERS } from '../globe/layers.config'
 import type { LayerCategory, PanelLayer } from '../globe/layers.config'
 import { setLayerOpacity, setLayerVisible } from '../globe/layerControl'
+import { FoldButton } from './Sidebar'
 
 const CATEGORY: Record<LayerCategory, { label: string; palette: string }> = {
   optical: { label: 'Photo', palette: 'gray' },
@@ -44,6 +45,8 @@ interface Props {
 
 export function LayersPanel({ viewer, onActiveChange, open, onClose }: Props) {
   const [rows, setRows] = useState(initialState)
+  /** The whole panel folded up to its heading. */
+  const [folded, setFolded] = useState(false)
   /** Groups that are folded: only their heading shows. */
   const [closed, setClosed] = useState<Record<string, boolean>>(() => Object.fromEntries(PANEL_GROUPS.map((group) => [group.id, !!group.startClosed])))
 
@@ -110,11 +113,15 @@ export function LayersPanel({ viewer, onActiveChange, open, onClose }: Props) {
                 Map layers
               </Text>
             </HStack>
-            <IconButton aria-label="Close the layers panel" size="xs" variant="ghost" color="gray.600" onClick={onClose}>
-              <X size={16} aria-hidden />
-            </IconButton>
+            <Flex align="center" gap="0.5">
+              <FoldButton title="Map layers" folded={folded} onToggle={() => setFolded((now) => !now)} bodyId="layers-panel-body" />
+              <IconButton aria-label="Close the layers panel" title="Close" size="xs" variant="ghost" color="gray.600" onClick={onClose}>
+                <X size={16} aria-hidden />
+              </IconButton>
+            </Flex>
           </Flex>
 
+          <Box id="layers-panel-body" hidden={folded}>
           {PANEL_GROUPS.map((group) => (
             <Fragment key={group.id}>
               {/* The group heading is a button: it folds and unfolds the group. */}
@@ -276,6 +283,7 @@ export function LayersPanel({ viewer, onActiveChange, open, onClose }: Props) {
               </Box>
             </Fragment>
           ))}
+          </Box>
         </Box>
       )}
     </Box>

@@ -141,7 +141,7 @@ export function MeasurePanel({ viewer, open, onClose }: Props) {
             })}
           </VStack>
           <Text fontSize="2xs" color="gray.600" mt="2">
-            The setting is kept in this browser. Heights in Identify stay in metres.
+            The setting is kept in this browser. Heights in Place info stay in metres.
           </Text>
         </Box>
       )}

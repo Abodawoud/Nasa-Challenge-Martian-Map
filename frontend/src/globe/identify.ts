@@ -52,7 +52,7 @@ export async function groundAt(place: LonLat, signal?: AbortSignal): Promise<Fac
     if (!response.ok) return { state: 'error', why: `The server answered ${response.status}.` }
     const data = (await response.json()) as PointAnswer
     if (!data.inside || data.elevation_m === undefined || data.elevation_m === null) {
-      return { state: 'none', why: 'No height data here. Our height map covers Jezero Crater only.' }
+      return { state: 'none', why: 'No height data for this place. We only have it inside Jezero Crater.' }
     }
     return {
       state: 'ready',
@@ -86,7 +86,7 @@ export function landingSiteHeightM(): Promise<number | undefined> {
 /** The slope bands of the chart. Our own bands: they describe the angle, they are not a safety rating. */
 export const SLOPE_BANDS: Array<{ upTo: number; word: string; color: string }> = [
   { upTo: 5, word: 'Nearly flat', color: '#2f9e6b' },
-  { upTo: 15, word: 'Gentle to moderate', color: '#d9b530' },
+  { upTo: 15, word: 'Gentle', color: '#d9b530' },
   { upTo: 25, word: 'Steep', color: '#e07b2a' },
   { upTo: 40, word: 'Very steep', color: '#c8321f' },
 ]
@@ -107,11 +107,11 @@ export async function rockAt(place: LonLat): Promise<Fact<RockFact>> {
   try {
     const [west, south, east, north] = await geologyBounds(ROCK_UNITS_SOURCE)
     if (place.lon < west || place.lon > east || place.lat < south || place.lat > north) {
-      return { state: 'none', why: 'Outside the USGS geologic map (it covers Jezero and the land west of it).' }
+      return { state: 'none', why: 'Not known here. The rock map only covers Jezero Crater and the land west of it.' }
     }
     const unit = await geologyAt(ROCK_UNITS_SOURCE, place.lon, place.lat)
     const info = unit === undefined ? undefined : ROCK_UNIT_INFO[unit]
-    if (!info) return { state: 'none', why: 'The USGS map has no rock unit at this place.' }
+    if (!info) return { state: 'none', why: 'The rock map has nothing marked at this place.' }
     return { state: 'ready', value: info }
   } catch {
     return { state: 'error', why: 'The USGS geologic map could not be loaded.' }
@@ -176,7 +176,7 @@ export async function roverAt(place: LonLat, signal: AbortSignal): Promise<Fact<
     const [west, south, east, north] = path.bounds
     // Far from Jezero there is nothing useful to say about the rover.
     if (place.lon < west - 1 || place.lon > east + 1 || place.lat < south - 1 || place.lat > north + 1) {
-      return { state: 'none', why: 'The rover is in Jezero Crater, far from this place.' }
+      return { state: 'none', why: 'No photos here. The rover is in Jezero Crater, far from this place.' }
     }
     const { sol, distanceM } = nearestDrive(path, place.lon, place.lat)
     let photos: RoverPhoto[] = []

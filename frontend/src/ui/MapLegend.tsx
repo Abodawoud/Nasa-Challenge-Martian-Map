@@ -3,9 +3,11 @@
 // in the Layers panel. Its content comes from PANEL_LAYERS (layers.config.ts), so a new
 // layer with a legend shows up here by itself.
 import { Box, Flex, HStack, IconButton, Text, VStack } from '@chakra-ui/react'
+import { useState } from 'react'
 import { ListTree, X } from 'lucide-react'
 import { PANEL_LAYERS } from '../globe/layers.config'
 import type { LegendItem } from '../globe/layers.config'
+import { FoldButton } from './Sidebar'
 
 /** A small sample of how one thing looks on the map. */
 function Sample({ item }: { item: LegendItem }) {
@@ -49,6 +51,8 @@ const ALWAYS: LegendItem[] = [{ color: '#e8231f', label: 'Perseverance landing s
 
 export function MapLegend({ activeLayers, open, onClose }: { activeLayers: string[]; open: boolean; onClose: () => void }) {
   const blocks = PANEL_LAYERS.filter((entry) => activeLayers.includes(entry.id) && (entry.legendItems || entry.legendScale))
+  /** Folded down to its heading. The legend sits at the bottom of the map, so it folds downwards. */
+  const [folded, setFolded] = useState(false)
   if (!open) return null
 
   return (
@@ -72,19 +76,22 @@ export function MapLegend({ activeLayers, open, onClose }: { activeLayers: strin
       borderRadius="xl"
       shadow="xl"
     >
-      <Flex align="center" justify="space-between" pl="3" pr="1.5" py="1.5" borderBottomWidth="1px" borderColor="gray.200" position="sticky" top="0" bg="white" zIndex="1">
+      <Flex align="center" justify="space-between" pl="3" pr="1.5" py="1.5" borderBottomWidth={folded ? 0 : '1px'} borderColor="gray.200" position="sticky" top="0" bg="white" zIndex="1">
         <HStack gap="2" color="brand.700">
           <ListTree size={15} aria-hidden />
           <Text as="h2" fontWeight="700" fontSize="sm">
             Legend
           </Text>
         </HStack>
-        <IconButton aria-label="Close the legend" size="xs" variant="ghost" color="gray.600" onClick={onClose}>
-          <X size={16} aria-hidden />
-        </IconButton>
+        <Flex align="center" gap="0.5">
+          <FoldButton title="the legend" folded={folded} onToggle={() => setFolded((now) => !now)} bodyId="tool-legend-body" down />
+          <IconButton aria-label="Close the legend" title="Close" size="xs" variant="ghost" color="gray.600" onClick={onClose}>
+            <X size={16} aria-hidden />
+          </IconButton>
+        </Flex>
       </Flex>
 
-      <VStack align="stretch" gap="0" aria-live="polite">
+      <VStack id="tool-legend-body" hidden={folded} align="stretch" gap="0" aria-live="polite">
         <VStack as="ul" align="stretch" gap="1.5" px="3" py="2.5" listStyleType="none">
           {ALWAYS.map((item) => (
             <Row key={item.label} item={item} />
