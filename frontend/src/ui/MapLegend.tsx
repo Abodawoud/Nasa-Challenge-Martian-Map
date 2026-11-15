@@ -4,9 +4,9 @@
 // layer with a legend shows up here by itself.
 import { Box, Flex, HStack, IconButton, Text, VStack } from '@chakra-ui/react'
 import { useState } from 'react'
-import { ListTree, X } from 'lucide-react'
+import { Palette, X } from 'lucide-react'
 import { PANEL_LAYERS } from '../globe/layers.config'
-import type { LegendItem } from '../globe/layers.config'
+import type { LegendItem, PanelLayer } from '../globe/layers.config'
 import { FoldButton } from './Sidebar'
 
 /** A small sample of how one thing looks on the map. */
@@ -26,7 +26,8 @@ function Sample({ item }: { item: LegendItem }) {
   )
 }
 
-function Row({ item }: { item: LegendItem }) {
+/** One entry of a legend: a sample, its name, and one sentence about it. */
+export function LegendRow({ item }: { item: LegendItem }) {
   return (
     <HStack as="li" gap="2" minW="0" align="flex-start">
       <Box mt="1px">
@@ -47,7 +48,40 @@ function Row({ item }: { item: LegendItem }) {
 }
 
 /** Markers that are on the map whatever layers are on. */
-const ALWAYS: LegendItem[] = [{ color: '#e8231f', label: 'Perseverance landing site', dot: true, hint: 'Where the rover touched down in February 2021.' }]
+export const MAP_MARKERS: LegendItem[] = [{ color: '#e8231f', label: 'Perseverance landing site', dot: true, hint: 'Where the rover touched down in February 2021.' }]
+
+/** What one layer shows and how to read it: used by the legend card and by the TOC. */
+export function LegendBody({ entry }: { entry: PanelLayer }) {
+  return (
+    <Box>
+      <Text fontSize="2xs" color="gray.600" lineHeight="1.35" mb={entry.legendScale || entry.legendItems ? '2' : '0'}>
+        {entry.note}
+        {entry.legend ? ` ${entry.legend}` : ''}
+      </Text>
+      {entry.legendScale && (
+        <Box mb={entry.legendItems ? '2' : '0'}>
+          <Box aria-hidden h="10px" borderRadius="full" borderWidth="1px" borderColor="blackAlpha.300" style={{ backgroundImage: entry.legendScale.css }} />
+          <HStack justify="space-between" mt="1" fontSize="2xs" color="gray.800">
+            <Text>{entry.legendScale.low}</Text>
+            <Text>{entry.legendScale.high}</Text>
+          </HStack>
+        </Box>
+      )}
+      {entry.legendItems && (
+        <VStack as="ul" align="stretch" gap="1.5" listStyleType="none">
+          {entry.legendItems.map((item) => (
+            <LegendRow key={item.label} item={item} />
+          ))}
+        </VStack>
+      )}
+      {entry.caution && (
+        <Text mt="1.5" fontSize="2xs" color="orange.800">
+          An estimate, not a measurement.
+        </Text>
+      )}
+    </Box>
+  )
+}
 
 export function MapLegend({ activeLayers, open, onClose }: { activeLayers: string[]; open: boolean; onClose: () => void }) {
   const blocks = PANEL_LAYERS.filter((entry) => activeLayers.includes(entry.id) && (entry.legendItems || entry.legendScale))
@@ -78,7 +112,7 @@ export function MapLegend({ activeLayers, open, onClose }: { activeLayers: strin
     >
       <Flex align="center" justify="space-between" pl="3" pr="1.5" py="1.5" borderBottomWidth={folded ? 0 : '1px'} borderColor="gray.200" position="sticky" top="0" bg="white" zIndex="1">
         <HStack gap="2" color="brand.700">
-          <ListTree size={15} aria-hidden />
+          <Palette size={15} aria-hidden />
           <Text as="h2" fontWeight="700" fontSize="sm">
             Legend
           </Text>
@@ -93,8 +127,8 @@ export function MapLegend({ activeLayers, open, onClose }: { activeLayers: strin
 
       <VStack id="tool-legend-body" hidden={folded} align="stretch" gap="0" aria-live="polite">
         <VStack as="ul" align="stretch" gap="1.5" px="3" py="2.5" listStyleType="none">
-          {ALWAYS.map((item) => (
-            <Row key={item.label} item={item} />
+          {MAP_MARKERS.map((item) => (
+            <LegendRow key={item.label} item={item} />
           ))}
         </VStack>
 
@@ -120,7 +154,7 @@ export function MapLegend({ activeLayers, open, onClose }: { activeLayers: strin
             {entry.legendItems && (
               <VStack as="ul" align="stretch" gap="1.5" listStyleType="none">
                 {entry.legendItems.map((item) => (
-                  <Row key={item.label} item={item} />
+                  <LegendRow key={item.label} item={item} />
                 ))}
               </VStack>
             )}

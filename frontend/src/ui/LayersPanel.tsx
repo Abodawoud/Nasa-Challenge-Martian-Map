@@ -1,12 +1,12 @@
 // The Layers panel: a white card opened from the tool bar (Sidebar.tsx). Every row is one entry of
 // PANEL_LAYERS (layers.config.ts): a switch, and a transparency slider for overlays.
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useState, useSyncExternalStore } from 'react'
 import type * as Cesium from 'cesium'
 import { Badge, Box, Flex, HStack, IconButton, Slider, Spinner, Switch, Text } from '@chakra-ui/react'
 import { ChevronDown, Layers, TriangleAlert, X } from 'lucide-react'
 import { PANEL_GROUPS, PANEL_LAYERS } from '../globe/layers.config'
-import type { LayerCategory, PanelLayer } from '../globe/layers.config'
-import { setLayerOpacity, setLayerVisible } from '../globe/layerControl'
+import type { LayerCategory } from '../globe/layers.config'
+import { layerStore } from '../globe/layerState'
 import { FoldButton } from './Sidebar'
 
 const CATEGORY: Record<LayerCategory, { label: string; palette: string }> = {
@@ -19,21 +19,6 @@ const CATEGORY: Record<LayerCategory, { label: string; palette: string }> = {
   radiation: { label: 'Radiation', palette: 'red' },
 }
 
-interface RowState {
-  on: boolean
-  opacity: number
-  /** Layers that are downloaded when first switched on. */
-  loading: boolean
-  error: boolean
-  /** Why it failed, for the small print under the message. */
-  reason?: string
-  /** A line of facts about the layer, from its data. */
-  info?: string
-}
-
-const initialState = (): Record<string, RowState> =>
-  Object.fromEntries(PANEL_LAYERS.map((entry) => [entry.id, { on: entry.defaultOn, opacity: entry.defaultOpacity, loading: false, error: false }]))
-
 interface Props {
   viewer: Cesium.Viewer | null
   /** Told which layers are on (panel ids), for the map legend. */
@@ -44,7 +29,12 @@ interface Props {
 }
 
 export function LayersPanel({ viewer, onActiveChange, open, onClose }: Props) {
-  const [rows, setRows] = useState(initialState)
+  // Which layers are on lives in one shared record (layerState.ts): the TOC and the legend read it too.
+  const rows = useSyncExternalStore(layerStore.subscribe, layerStore.get)
+  const { toggle, fade } = layerStore
+  useEffect(() => {
+    layerStore.setViewer(viewer)
+  }, [viewer])
   /** The whole panel folded up to its heading. */
   const [folded, setFolded] = useState(false)
   /** Groups that are folded: only their heading shows. */
@@ -57,25 +47,6 @@ export function LayersPanel({ viewer, onActiveChange, open, onClose }: Props) {
   useEffect(() => {
     onActiveChange?.(active ? active.split('|') : [])
   }, [active, onActiveChange])
-
-  const patch = (id: string, change: Partial<RowState>) => setRows((all) => ({ ...all, [id]: { ...all[id], ...change } }))
-
-  const toggle = (entry: PanelLayer, on: boolean) => {
-    if (!viewer) return
-    const { opacity } = rows[entry.id]
-    patch(entry.id, { on, error: false, loading: on && entry.kind !== 'imagery' })
-    setLayerVisible(viewer, entry, on, opacity)
-      .then((info) => patch(entry.id, { loading: false, ...(info ? { info } : {}) }))
-      .catch((error) => {
-        console.warn('[Layers] could not show', entry.id, error)
-        patch(entry.id, { on: false, loading: false, error: true, reason: error instanceof Error ? error.message : String(error) })
-      })
-  }
-
-  const fade = (entry: PanelLayer, opacity: number) => {
-    patch(entry.id, { opacity })
-    if (viewer) setLayerOpacity(viewer, entry, opacity)
-  }
 
   // Escape closes the panel.
   useEffect(() => {

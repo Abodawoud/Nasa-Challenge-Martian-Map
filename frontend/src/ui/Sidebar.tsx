@@ -2,17 +2,17 @@
 //
 // Each icon is one tool ("plugin"). A click opens its panel beside the bar, a second click
 // closes it. Layers, Places and Sources share the left side, so one of them is open at a
-// time. The Legend is its own card at the bottom right, so it can stay open next to them.
+// time. "Go to" flies to known places (the code calls it places). The Legend is its own card at the bottom right, so it can stay open next to them.
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type * as CesiumTypes from 'cesium'
 import * as Cesium from 'cesium'
 import { Box, Flex, IconButton, Link, Text, VStack } from '@chakra-ui/react'
-import { BookOpen, ExternalLink, Layers, ListTree, ChevronUp, MapPin, MapPinned, Ruler, X } from 'lucide-react'
+import { BookOpen, ExternalLink, Layers, ListTree, ChevronUp, MapPin, Navigation, Palette, Ruler, X } from 'lucide-react'
 import { MARS_ELLIPSOID, PERSEVERANCE_LANDING } from '../globe/mars'
 import { flyToJezero } from '../globe/MarsViewer'
 
-export type Tool = 'layers' | 'measure' | 'identify' | 'places' | 'sources'
+export type Tool = 'layers' | 'toc' | 'measure' | 'identify' | 'places' | 'sources'
 
 interface RailProps {
   tool: Tool | null
@@ -27,9 +27,10 @@ interface RailProps {
 export function ToolRail({ tool, onTool, legendOpen, onLegend, layerCount }: RailProps) {
   const tools: Array<{ id: Tool; label: string; icon: ReactNode; badge?: number }> = [
     { id: 'layers', label: 'Layers', icon: <Layers size={19} aria-hidden />, badge: layerCount },
+    { id: 'toc', label: 'TOC', icon: <ListTree size={19} aria-hidden /> },
     { id: 'measure', label: 'Measure', icon: <Ruler size={19} aria-hidden /> },
     { id: 'identify', label: 'Place info', icon: <MapPin size={19} aria-hidden /> },
-    { id: 'places', label: 'Places', icon: <MapPinned size={19} aria-hidden /> },
+    { id: 'places', label: 'Go to', icon: <Navigation size={19} aria-hidden /> },
     { id: 'sources', label: 'Sources', icon: <BookOpen size={19} aria-hidden /> },
   ]
   return (
@@ -41,7 +42,7 @@ export function ToolRail({ tool, onTool, legendOpen, onLegend, layerCount }: Rai
       ))}
       <Box w="8" h="1px" bg="whiteAlpha.300" my="1" />
       <RailButton label="Legend" active={legendOpen} controls="tool-legend" onClick={() => onLegend(!legendOpen)}>
-        <ListTree size={19} aria-hidden />
+        <Palette size={19} aria-hidden />
       </RailButton>
     </VStack>
   )
@@ -132,7 +133,7 @@ export function ToolCard({ id, title, icon, onClose, children, width = '340px' }
   )
 }
 
-// ---------------------------------------------------------------------------- Places
+// ---------------------------------------------------------------------------- Go to (fly to a known place)
 
 /**
  * A top view of a place. `acrossM` is about how much ground is seen from side to side.
@@ -160,7 +161,7 @@ const PLACES: Array<{ title: string; note: string; go: (viewer: CesiumTypes.View
 
 export function PlacesPanel({ viewer, onClose }: { viewer: CesiumTypes.Viewer | null; onClose: () => void }) {
   return (
-    <ToolCard id="tool-places" title="Places" icon={<MapPinned size={16} aria-hidden />} onClose={onClose}>
+    <ToolCard id="tool-places" title="Go to" icon={<Navigation size={16} aria-hidden />} onClose={onClose}>
       <VStack as="ul" align="stretch" gap="0" listStyleType="none">
         {PLACES.map((place) => (
           <Box as="li" key={place.title} borderBottomWidth="1px" borderColor="gray.100" _last={{ borderBottomWidth: 0 }}>

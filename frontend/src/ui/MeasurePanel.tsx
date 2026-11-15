@@ -7,7 +7,8 @@ import { Check, Ruler, Settings, Spline, Square, Trash2, Undo2 } from 'lucide-re
 import { MEASURE_KINDS, MeasureTool } from '../globe/measure'
 import type { MeasureKind, Measurement } from '../globe/measure'
 import { formatArea, formatDistance, formatPlace } from '../globe/mapTools'
-import { UNIT_SYSTEMS, unitStore } from '../globe/units'
+import { AREA_UNITS, DISTANCE_UNITS, unitStore } from '../globe/units'
+import { UnitPicker } from './UnitPicker'
 import { ToolCard } from './Sidebar'
 
 const EMPTY: Measurement = { points: [], segments: [], totalM: 0, finished: false, closed: false, areaM2: 0 }
@@ -99,49 +100,15 @@ export function MeasurePanel({ viewer, open, onClose }: Props) {
 
       {settings && (
         <Box id="measure-settings" px="4" py="3" bg="gray.50" borderBottomWidth="1px" borderColor="gray.200">
-          <Text as="h3" fontSize="2xs" fontWeight="700" letterSpacing="0.06em" textTransform="uppercase" color="brand.700" mb="1.5">
+          <Text as="h3" fontSize="2xs" fontWeight="700" letterSpacing="0.06em" textTransform="uppercase" color="brand.700" mb="2">
             Units
           </Text>
-          <VStack role="radiogroup" aria-label="Units" align="stretch" gap="1.5">
-            {UNIT_SYSTEMS.map((system) => {
-              const chosen = units === system.id
-              return (
-                <Flex
-                  as="button"
-                  key={system.id}
-                  role="radio"
-                  aria-checked={chosen}
-                  onClick={() => unitStore.set(system.id)}
-                  align="center"
-                  gap="2.5"
-                  px="2.5"
-                  py="1.5"
-                  textAlign="left"
-                  cursor="pointer"
-                  borderRadius="md"
-                  borderWidth="1px"
-                  borderColor={chosen ? 'brand.500' : 'gray.200'}
-                  bg="white"
-                  _hover={{ borderColor: 'brand.400' }}
-                  _focusVisible={{ outline: '2px solid', outlineColor: 'brand.500', outlineOffset: '2px' }}
-                >
-                  <Flex flexShrink={0} align="center" justify="center" boxSize="4" borderRadius="full" borderWidth="2px" borderColor={chosen ? 'brand.700' : 'gray.400'}>
-                    {chosen && <Box boxSize="2" borderRadius="full" bg="brand.700" />}
-                  </Flex>
-                  <Box>
-                    <Text fontSize="sm" fontWeight="600" color="gray.900">
-                      {system.title}
-                    </Text>
-                    <Text fontSize="2xs" color="gray.600">
-                      {system.note}
-                    </Text>
-                  </Box>
-                </Flex>
-              )
-            })}
+          <VStack align="stretch" gap="3">
+            <UnitPicker label="Distances in" options={DISTANCE_UNITS} value={units.distance} onChange={(distance) => unitStore.set({ distance })} />
+            <UnitPicker label="Areas in" options={AREA_UNITS} value={units.area} onChange={(area) => unitStore.set({ area })} />
           </VStack>
           <Text fontSize="2xs" color="gray.600" mt="2">
-            The setting is kept in this browser. Heights in Place info stay in metres.
+            Type in a box to search, for example &ldquo;mil&rdquo; or &ldquo;hect&rdquo;. The choice is kept in this browser. Heights in Place info stay in metres.
           </Text>
         </Box>
       )}
