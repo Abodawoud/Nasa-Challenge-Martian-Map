@@ -39,6 +39,10 @@ Code changes show up live: the frontend reloads in the browser, and the backend 
 
 No data is stored in this project. All images and 3D ground are loaded live from NASA services, so an internet connection is needed.
 
+### Online for free
+
+The steps to put the website on Vercel and the backend on a Hugging Face Space, both free, are in [`DEPLOY.md`](DEPLOY.md).
+
 ### A public link from this computer
 
 To let other people open the app, start two more services. Your computer is the host: the link works while it is on and Docker is running.

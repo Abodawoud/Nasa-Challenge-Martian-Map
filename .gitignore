@@ -34,3 +34,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# Folder built by deploy/make-space.sh for the Hugging Face Space
+deploy/space-build/
