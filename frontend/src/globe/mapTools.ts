@@ -66,6 +66,47 @@ export function drawPosition(viewer: Cesium.Viewer, place: LonLat, lift = 2): Ce
   return Cesium.Cartesian3.fromDegrees(place.lon, place.lat, ground + lift, MARS_ELLIPSOID)
 }
 
+/**
+ * Call `redraw` whenever the ground on screen has changed, so shapes can be put on it again.
+ *
+ * Why this is needed (measured 2026-11-15): the map draws coarse ground from far away and
+ * detailed ground from near, and the two can differ by up to 100 m in height at the same
+ * place (Trek's terrain is built from different height sources per zoom level). A shape that
+ * took its height once is then under or above the ground that is shown: in a tilted view a
+ * line seemed to cut through the air. So shapes take their heights again when the camera has
+ * moved or new ground tiles have arrived, at most a few times per second.
+ *
+ * Returns a function that stops it.
+ */
+export function onGroundChanged(viewer: Cesium.Viewer, redraw: () => void): () => void {
+  const { scene, camera } = viewer
+  const MIN_GAP_MS = 180
+  let last = 0
+  let tilesChanged = true
+  const seen = new Cesium.Cartesian3()
+  const stops = [
+    scene.globe.tileLoadProgressEvent.addEventListener(() => {
+      tilesChanged = true
+    }),
+    scene.morphComplete.addEventListener(() => {
+      tilesChanged = true
+    }),
+    scene.postRender.addEventListener(() => {
+      const now = performance.now()
+      if (now - last < MIN_GAP_MS) return
+      const moved = !Cesium.Cartesian3.equalsEpsilon(camera.positionWC, seen, 0, 0.5)
+      if (!moved && !tilesChanged) return
+      last = now
+      tilesChanged = false
+      Cesium.Cartesian3.clone(camera.positionWC, seen)
+      redraw()
+    }),
+  ]
+  return () => {
+    for (const stop of stops) stop()
+  }
+}
+
 /** Screen position of a place, or undefined when it is behind the planet or off the map. */
 export function screenPosition(viewer: Cesium.Viewer, place: LonLat): Cesium.Cartesian2 | undefined {
   return Cesium.SceneTransforms.worldToWindowCoordinates(viewer.scene, drawPosition(viewer, place)) ?? undefined

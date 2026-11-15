@@ -16,10 +16,13 @@
 // small cache. Moving the mouse or dragging a point only changes the cache and asks for one
 // new frame. Nothing is removed and added again while the mouse moves.
 //
-// The line is drawn over the ground the map shows, and always on top of it (so a hill never
-// hides it). The numbers are distances over the Mars sphere, see surfaceDistanceM().
+// The line lies ON the ground the map shows, in 3D too: it takes the ground's height every
+// 20 m, and takes it again whenever the ground on screen changes (see onGroundChanged in
+// mapTools.ts). Where a hill stands in front of the line, the line is drawn faintly, so it
+// reads as "behind the hill" and is still not lost.
+// The numbers are distances over the Mars sphere, see surfaceDistanceM().
 import * as Cesium from 'cesium'
-import { drawPosition, formatDistance, pickPlace, pointsBetween, surfaceDistanceM, toolCursor, toolInput } from './mapTools'
+import { drawPosition, formatDistance, onGroundChanged, pickPlace, pointsBetween, surfaceDistanceM, toolCursor, toolInput } from './mapTools'
 import type { LonLat } from './mapTools'
 
 const NAVY = Cesium.Color.fromCssColorString('#0c1a3d')
@@ -29,11 +32,18 @@ const GRAB_PX = 14
 const CLICK_PX = 5
 /** Two clicks this close in time and place are a double click: it finishes the line. */
 const DOUBLE_CLICK_MS = 350
-/** Pieces per part of the line, so it follows the ground and the curve of the planet. */
-const PIECES = 48
+/**
+ * The line takes the height of the ground every this many metres, so it lies on hills and in
+ * dips. A part never gets more than MAX_PIECES pieces (a very long part is seen from far away,
+ * where coarser steps do not show) and never fewer than MIN_PIECES.
+ */
+const STEP_M = 20
+const MIN_PIECES = 12
+const MAX_PIECES = 320
 /** How long a new part takes to draw itself in. */
 const GROW_MS = 260
-const LIFT_M = 3
+/** The line floats this much above the ground, so it does not flicker in and out of it. */
+const LIFT_M = 4
 
 /** The line as it is now. */
 export interface LineState {
@@ -110,7 +120,8 @@ export class LineDrawer {
         width: 5,
         arcType: Cesium.ArcType.NONE, // the positions already follow the ground
         material: solid,
-        depthFailMaterial: solid, // also drawn where a hill is in front
+        // Behind a hill: faint, so it reads as hidden but is not lost.
+        depthFailMaterial: new Cesium.PolylineOutlineMaterialProperty({ color: LINE.withAlpha(0.35), outlineColor: NAVY.withAlpha(0.25), outlineWidth: 2 }),
       },
     })
     const dashed = new Cesium.PolylineDashMaterialProperty({ color: LINE, gapColor: NAVY.withAlpha(0.55), dashLength: 14 })
@@ -121,7 +132,7 @@ export class LineDrawer {
         width: 3,
         arcType: Cesium.ArcType.NONE,
         material: dashed,
-        depthFailMaterial: dashed,
+        depthFailMaterial: new Cesium.PolylineDashMaterialProperty({ color: LINE.withAlpha(0.35), gapColor: Cesium.Color.TRANSPARENT, dashLength: 14 }),
       },
     })
     this.totalEntity = viewer.entities.add({
@@ -167,11 +178,13 @@ export class LineDrawer {
     listen(canvas, 'pointerleave', this.onLeave)
     listen(canvas, 'contextmenu', this.onContextMenu)
     listen(window, 'keydown', this.onKey)
-    // The drawing heights change after a 2D / 3D switch, and when sharper ground has loaded
-    // after the camera moved: work the positions out again.
+    // Put the line on the ground again whenever the ground on screen has changed: sharper
+    // tiles arrived, the camera moved, or the view switched between 2D and 3D.
     this.stops.push(
-      viewer.scene.morphComplete.addEventListener(() => this.recomputeAll()),
-      viewer.camera.moveEnd.addEventListener(() => this.recomputeAll()),
+      onGroundChanged(viewer, () => {
+        if (this.points.length === 0 || this.dragging >= 0) return
+        this.recomputeAll()
+      }),
     )
   }
 
@@ -451,7 +464,9 @@ export class LineDrawer {
 
   // ---------------------------------------------------------------- drawing
 
-  private partFrom(a: LonLat, b: LonLat, pieces = PIECES) {
+  /** The positions of one part: on the ground, one about every STEP_M metres. */
+  private partFrom(a: LonLat, b: LonLat, maxPieces = MAX_PIECES) {
+    const pieces = Math.min(maxPieces, Math.max(MIN_PIECES, Math.ceil(surfaceDistanceM(a, b) / STEP_M)))
     return pointsBetween(a, b, pieces).map((place) => drawPosition(this.viewer, place, LIFT_M))
   }
 
@@ -472,7 +487,8 @@ export class LineDrawer {
 
   private updatePreview() {
     const last = this.points[this.points.length - 1]
-    this.previewPositions = last && this.cursorPlace ? this.partFrom(last, this.cursorPlace, 24) : []
+    // The dashed line follows the mouse, so it is rebuilt on every move: fewer pieces.
+    this.previewPositions = last && this.cursorPlace ? this.partFrom(last, this.cursorPlace, 96) : []
   }
 
   private previewShown() {
@@ -547,7 +563,10 @@ export class LineDrawer {
       const index = this.labelEntities.length
       this.labelEntities.push(
         viewer.entities.add({
-          position: new Cesium.CallbackPositionProperty(() => this.partPositions[index]?.[PIECES / 2], false),
+          position: new Cesium.CallbackPositionProperty(() => {
+            const part = this.partPositions[index]
+            return part?.[Math.floor(part.length / 2)]
+          }, false),
           label: this.labelStyle(() => (this.points[index + 1] ? formatDistance(surfaceDistanceM(this.points[index], this.points[index + 1])) : '')),
         }),
       )

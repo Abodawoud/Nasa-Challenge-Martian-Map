@@ -13,7 +13,7 @@ import { ROCK_UNITS_SOURCE, ROCK_UNIT_INFO } from './layers.config'
 import { geologyAt, geologyBounds } from './geologyLayer'
 import { loadRoverPath, nearestDrive } from './pathLayer'
 import { PERSEVERANCE_LANDING } from './mars'
-import { drawPosition, pickPlace, toolCursor, toolInput } from './mapTools'
+import { drawPosition, onGroundChanged, pickPlace, toolCursor, toolInput } from './mapTools'
 import type { LonLat } from './mapTools'
 
 // ------------------------------------------------------------------ the facts
@@ -272,11 +272,8 @@ export class IdentifyTool {
       () => canvas.removeEventListener('pointerdown', this.onDown, true),
       () => canvas.removeEventListener('pointerup', this.onUp, true),
       waypointStore.subscribe(() => this.drawWaypoints()),
-      // After a 2D / 3D switch the drawing heights change: draw again.
-      viewer.scene.morphComplete.addEventListener(() => {
-        this.drawWaypoints()
-        this.drawPicked()
-      }),
+      // Keep the marks on the ground that is shown (it changes with zoom, see onGroundChanged).
+      onGroundChanged(viewer, () => this.reground()),
     )
     this.drawWaypoints()
   }
@@ -326,6 +323,17 @@ export class IdentifyTool {
     this.picked = place
     this.drawPicked()
     this.onPick(place)
+  }
+
+  /** Move the existing marks to the current ground height. Nothing is removed or added. */
+  private reground() {
+    const { viewer } = this
+    if (viewer.isDestroyed()) return
+    if (this.picked && this.pickedEntity) this.pickedEntity.position = new Cesium.ConstantPositionProperty(drawPosition(viewer, this.picked, 3))
+    const waypoints = waypointStore.get()
+    this.waypointEntities.forEach((entity, i) => {
+      if (waypoints[i]) entity.position = new Cesium.ConstantPositionProperty(drawPosition(viewer, waypoints[i], 3))
+    })
   }
 
   private drawPicked() {

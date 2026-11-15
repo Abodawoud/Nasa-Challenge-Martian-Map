@@ -25,6 +25,8 @@ import { GroundCut, HeightScale, SlopeGauge } from './IdentifyCharts'
 import { ToolCard } from './Sidebar'
 
 const LOADING = { state: 'loading' } as const
+/** Photos shown in the panel. The rest are in the viewer. */
+const SHOWN_PHOTOS = 3
 const metres = new Intl.NumberFormat('en', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 const whole = new Intl.NumberFormat('en', { maximumFractionDigits: 0 })
 
@@ -247,31 +249,41 @@ export function IdentifyPanel({ viewer, open, onClose }: Props) {
                     )}
                     {value.photos.length > 0 && (
                       <>
+                        {/* Three photos. The third one carries "+N" for the rest: all of them are in the viewer. */}
                         <SimpleGrid as="ul" columns={3} gap="1.5" mt="2" listStyleType="none">
-                          {value.photos.map((item, index) => (
-                            <Box as="li" key={item.small}>
-                              <Box
-                                as="button"
-                                display="block"
-                                w="full"
-                                p="0"
-                                cursor="zoom-in"
-                                borderRadius="md"
-                                overflow="hidden"
-                                borderWidth="1px"
-                                borderColor="gray.300"
-                                aria-label={`Open photo ${index + 1} of ${value.photos.length}: ${item.camera}, sol ${value.sol}`}
-                                onClick={() => setPhoto(index)}
-                                _hover={{ borderColor: 'brand.500' }}
-                                _focusVisible={{ outline: '2px solid', outlineColor: 'brand.500', outlineOffset: '2px' }}
-                              >
-                                <img src={item.small} alt="" width={96} height={72} loading="lazy" style={{ display: 'block', width: '100%', height: 72, objectFit: 'cover', background: '#e5e7eb' }} />
+                          {value.photos.slice(0, SHOWN_PHOTOS).map((item, index) => {
+                            const more = index === SHOWN_PHOTOS - 1 ? value.photos.length - SHOWN_PHOTOS : 0
+                            return (
+                              <Box as="li" key={item.small}>
+                                <Box
+                                  as="button"
+                                  position="relative"
+                                  display="block"
+                                  w="full"
+                                  p="0"
+                                  cursor="zoom-in"
+                                  borderRadius="md"
+                                  overflow="hidden"
+                                  borderWidth="1px"
+                                  borderColor="gray.300"
+                                  aria-label={more > 0 ? `Open the photo viewer: ${more} more photos` : `Open photo ${index + 1} of ${value.photos.length}: ${item.camera}, sol ${value.sol}`}
+                                  onClick={() => setPhoto(index)}
+                                  _hover={{ borderColor: 'brand.500' }}
+                                  _focusVisible={{ outline: '2px solid', outlineColor: 'brand.500', outlineOffset: '2px' }}
+                                >
+                                  <img src={item.small} alt="" width={110} height={82} loading="lazy" style={{ display: 'block', width: '100%', height: 82, objectFit: 'cover', background: '#e5e7eb' }} />
+                                  {more > 0 && (
+                                    <Flex position="absolute" inset="0" align="center" justify="center" bg="rgba(12, 26, 61, 0.72)" color="white" fontSize="lg" fontWeight="700" fontVariantNumeric="tabular-nums" aria-hidden>
+                                      +{more}
+                                    </Flex>
+                                  )}
+                                </Box>
                               </Box>
-                            </Box>
-                          ))}
+                            )
+                          })}
                         </SimpleGrid>
                         <Text fontSize="2xs" color="gray.600" mt="1.5">
-                          Taken by the rover on sol {value.sol}, near this place but not exactly on it. Click a photo to look through them.
+                          {value.photos.length} photos taken by the rover on sol {value.sol}, near this place but not exactly on it. Click a photo to look through all of them.
                         </Text>
                       </>
                     )}
