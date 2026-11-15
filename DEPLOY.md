@@ -1,11 +1,11 @@
 # Put Martian Map online for free
 
-Two free services, each with one job:
+Two free services, each with one job. Neither asks for a credit card.
 
-| Part | Service | Cost | What it gives |
-|---|---|---|---|
-| The website (frontend) | **Vercel**, Hobby plan | Free | A fixed address that is always up |
-| The calculator (backend) | **Hugging Face Spaces**, Docker Space on free CPU | Free | Runs our backend container as it is |
+| Part | Service | What it gives |
+|---|---|---|
+| The website (frontend) | **Vercel**, Hobby plan | A fixed address that is always up |
+| The calculator (backend) | **Hugging Face Space**, Gradio, free hardware | Runs our backend inside a small Gradio app |
 
 ```mermaid
 flowchart LR
@@ -17,27 +17,31 @@ flowchart LR
 
 The website asks for `/api/...` on its own address. Vercel passes those requests on to the Space. So the app needs no change, and the browser never talks to the Space directly.
 
-You need two free accounts: <https://huggingface.co/join> and <https://vercel.com/signup> (sign up to Vercel with your GitHub account, it is the easy way).
+**Why a Gradio Space.** Hugging Face runs Docker Spaces on paid hardware only (seen on 2026-11-15). A Gradio Space is free. So `deploy/huggingface-gradio/app.py` starts our normal backend inside a Gradio app: the API still answers under `/api`, and the front address shows a short page about it.
 
 ---
 
 ## Step 1. The backend, on Hugging Face
 
-1. On Hugging Face, choose **New Space**.
+1. On Hugging Face choose **New Space**.
    - Space name: `martian-map-api`
-   - License: MIT · SDK: **Docker**, template **Blank** · Hardware: **CPU basic (free)** · Public
+   - SDK: **Gradio**, template **Blank**
+   - Hardware: the one marked **Free**
+   - Public
 2. Build the folder to upload. In this project:
    ```bash
    bash deploy/make-space.sh
    ```
-   It creates `deploy/space-build/` with four things: `Dockerfile`, `README.md`, `requirements.txt` and the `app` folder.
-3. Put those files in the Space. The simple way: on the Space page open **Files**, then **Add file**, then **Upload files**, drag in everything that is inside `deploy/space-build/`, and commit.
-4. The Space builds for a few minutes. When it says **Running**, open:
+   It creates `deploy/space-build/` with four things: `app.py`, `requirements.txt`, `packages.txt` and the folder `mapapi`.
+3. On the Space page open **Files**, then **Add file**, then **Upload files**. Drag in everything that is inside `deploy/space-build/` (the three files and the `mapapi` folder) and commit.
+   - Keep the `README.md` that Hugging Face made. Do not replace it.
+   - If the Space already has an `app.py`, ours replaces it.
+4. The Space builds for a few minutes. When it says **Running**, open this address (with your Hugging Face name in place of `YOUR-HF-NAME`):
    ```
    https://YOUR-HF-NAME-martian-map-api.hf.space/api/health
    ```
-   It must answer `{"status":"ok", ...}`. `YOUR-HF-NAME` is your Hugging Face user name.
-5. Check the height map is ready (give it some seconds after the start):
+   It must answer `{"status":"ok", ...}`.
+5. A few seconds later, check the height map:
    ```
    https://YOUR-HF-NAME-martian-map-api.hf.space/api/dem/info
    ```
@@ -45,7 +49,13 @@ You need two free accounts: <https://huggingface.co/join> and <https://vercel.co
 
 ## Step 2. Tell the website where the backend is
 
-Open `frontend/vercel.json` and replace `YOUR-HF-NAME` in the `destination` line with your Hugging Face user name. Commit and push.
+Open `frontend/vercel.json`. In the `destination` line put the address of your Space, like this:
+
+```
+"destination": "https://YOUR-HF-NAME-martian-map-api.hf.space/api/:path*"
+```
+
+Commit and push.
 
 ## Step 3. The website, on Vercel
 
@@ -58,9 +68,16 @@ From then on, every push to `main` updates the website by itself.
 
 ---
 
+## What was tested, and what was not
+
+- **Tested on the developer's computer:** the content of `deploy/space-build/` with the newest Gradio (6.32). It starts, downloads the height map, and answers `/api/health`, `/api/point`, `/api/routes` and `/api/reach`. It used about 385 MB of memory.
+- **Not tested:** the two services themselves. The first real run is yours.
+
 ## Things to know
 
-- **The backend sleeps.** A free Space stops after a time with no visitors. The next visit wakes it up, which takes about a minute: during that time the map works but heights and routes say the server cannot be reached. Open the site a few minutes before a demo.
+- **The backend sleeps.** A free Space stops after a time with no visitors. The next visit wakes it up, which can take a minute or two. During that time the map works, but heights and routes say the server cannot be reached. Open the site a few minutes before a demo.
+- **Long routes use the simpler search.** To stay small in memory, the Space uses the direction-aware "Fastest" search only for short routes. The answer says which search was used.
 - **After a backend change**, run `bash deploy/make-space.sh` again and upload the files again. The Space does not follow GitHub by itself.
-- **Free plans change.** These steps were written on 2026-11-15 and were not run end to end by us: the two accounts are yours to create. Check each service's current free limits before relying on it.
+- **Free plans change.** Hugging Face moved Docker Spaces to paid hardware while we were building this. Check each service's current free limits before relying on it.
+- **Another free host for the backend:** `render.yaml` is ready for Render's free web service (512 MB of memory, sleeps after 15 minutes). Not tested by us.
 - **The link from your own computer** (the Cloudflare tunnel in the README) still works and needs no account. It is the fallback.

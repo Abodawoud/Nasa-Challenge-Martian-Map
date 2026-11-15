@@ -1,0 +1,7 @@
+# The backend's packages. Gradio itself is installed by the Space (its version is in the
+# Space's own README). fastapi and uvicorn are left unpinned here, so they fit that Gradio.
+fastapi
+uvicorn[standard]
+rasterio==1.4.*
+numpy==2.*
+scikit-image==0.25.*

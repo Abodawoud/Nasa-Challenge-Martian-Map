@@ -16,6 +16,7 @@ The maths needs only a DemGrid. The tests use small synthetic grids.
 from __future__ import annotations
 
 import math
+import os
 import time
 from typing import Any, Callable
 
@@ -97,7 +98,8 @@ FASTEST_METHOD = "direction-aware"
 # The direction-aware search is only tried when its search area has at most this many cells.
 # It needs about 200 bytes of memory per cell. A bigger area would be slow and heavy.
 # Then the cell-steepness result is used.
-DIRECTION_AWARE_MAX_CELLS = 1_200_000
+# A host with little memory can lower it with the setting DIRECTION_AWARE_MAX_CELLS.
+DIRECTION_AWARE_MAX_CELLS = int(os.environ.get("DIRECTION_AWARE_MAX_CELLS", "1200000"))
 
 # The candidates, in table order. 'idea' is shown to the user.
 CANDIDATES: tuple[dict[str, Any], ...] = (
